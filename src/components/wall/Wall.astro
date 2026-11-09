@@ -1,16 +1,18 @@
 ---
 /*
- * Wall — every card of the home page, in logical reading order:
- * Léo → Projects hub → each project → Background → Skills → Contact.
+ * Wall — the 5 cards of the home page, in logical reading order:
+ * Léo → Projects → Background → Skills → Contact.
  * This HTML is the "list view": complete and readable without JavaScript.
  * With JavaScript (src/scripts/wall.ts), the same cards are placed on a plane
  * (positions from src/data/wall.ts) and joined by orthogonal wires.
+ * The Projects card leads to the projects page, with a view transition
+ * (shared name "projects-card").
  */
 import WallCard from './WallCard.astro';
 import BlueprintPlaceholder from './BlueprintPlaceholder.astro';
 import TopologyMap from '../TopologyMap.astro';
 import { useTranslations, type Lang } from '../../i18n/ui';
-import { projectPath } from '../../i18n/routes';
+import { projectsPath } from '../../i18n/routes';
 import { getProjects, getExperiences } from '../../lib/content';
 import { buildGraph } from '../../data/graph';
 import { DOMAINS } from '../../data/domains';
@@ -29,26 +31,20 @@ const projects = await getProjects(lang);
 const experiences = await getExperiences(lang);
 const domainGraph = buildGraph([]); // LÉO + domains only, for the Skills card
 
-// Node numbers follow reading order: 00 = Léo, 01 = hub, then projects…
-const firstSectionNode = 2 + projects.length;
-const projectIds = projects.map((p) => `node-${p.slug}`);
-const layout = buildWall(projectIds, DESKTOP);
-const mobileLayout = buildWall(projectIds, MOBILE);
+const layout = buildWall(DESKTOP);
+const mobileLayout = buildWall(MOBILE);
 const place = (id: string): string | undefined => {
   const desktop = layout.placements[id];
   const mobile = mobileLayout.placements[id];
   return desktop && mobile ? placementStyle(desktop, mobile) : undefined;
 };
-
-const projectCount = (d: (typeof DOMAINS)[number]): number =>
-  projects.filter((p) => p.data.domains.includes(d)).length;
 ---
 
 <div class="wall" data-wall data-links={JSON.stringify(layout.links)}>
 <div class="plane" data-plane>
   <svg class="wires" data-wires aria-hidden="true"></svg>
   <!-- Léo: the root node -->
-  <WallCard id="node-leo" style={place("node-leo")} kind="root" node={0} label={t('card.root')} meta="Paris, FR">
+  <WallCard id="node-leo" style={place('node-leo')} kind="root" node={0} label={t('card.root')} meta="Paris, FR">
     <BlueprintPlaceholder slot="visual" seed="leo-salvayre" label="portrait" />
     <h1 class="name">Léo<br />Salvayre<span class="dot" aria-hidden="true"></span></h1>
     <p class="tagline">{t('hero.tagline')}</p>
@@ -58,44 +54,35 @@ const projectCount = (d: (typeof DOMAINS)[number]): number =>
     </ul>
   </WallCard>
 
-  <!-- Projects hub -->
-  <WallCard id="node-projects" style={place("node-projects")} kind="hub" node={1} label={t('card.hub')} meta={pad(projects.length)}>
-    <h2 class="section-title">{t('hub.title')}</h2>
-    <p class="muted">{t('hub.text')}</p>
-    <ul class="tally" role="list">
-      {DOMAINS.map((d) => (
-        <li class="mono">
-          <span>{t(`domain.${d}`)}</span>
-          <span>{pad(projectCount(d))}</span>
+  <!-- Projects: a preview that opens the projects page -->
+  <WallCard
+    id="node-projects"
+    style={`${place('node-projects') ?? ''}; view-transition-name: projects-card`}
+    kind="hub"
+    node={1}
+    label={t('card.hub')}
+    meta={pad(projects.length)}
+  >
+    <div slot="visual" class="mosaic" aria-hidden="true">
+      {projects.slice(0, 6).map((p) => <BlueprintPlaceholder seed={p.slug} />)}
+    </div>
+    <h2 class="section-title">
+      <a href={projectsPath(lang)} class="stretched-link">{t('hub.title')}</a>
+    </h2>
+    <ol class="titles" role="list">
+      {projects.map((p, i) => (
+        <li>
+          <span class="mono">{pad(i + 1)}</span>
+          <span>{p.data.title}</span>
+          <span class="mono">{p.data.domains.map((d) => t(`domain.${d}`)).join(' · ')}</span>
         </li>
       ))}
-    </ul>
+    </ol>
+    <p class="cta mono" aria-hidden="true">{t('hub.cta')} →</p>
   </WallCard>
 
-  <!-- One card per project -->
-  {projects.map((p, i) => (
-    <WallCard
-      id={`node-${p.slug}`}
-      style={place(`node-${p.slug}`)}
-      kind="project"
-      node={2 + i}
-      label={`${t('card.project')} ${pad(i + 1)}`}
-      meta={String(p.data.year)}
-      domains={p.data.domains}
-    >
-      <BlueprintPlaceholder slot="visual" seed={p.slug} />
-      <h3 class="project-title">
-        <a href={projectPath(lang, p.slug)} class="stretched">{p.data.title}</a>
-      </h3>
-      <p class="muted">{p.data.summary}</p>
-      <ul class="tags" role="list">
-        {p.data.domains.map((d) => <li class="mono">{t(`domain.${d}`)}</li>)}
-      </ul>
-    </WallCard>
-  ))}
-
   <!-- Background as a traceroute -->
-  <WallCard id="node-background" style={place("node-background")} kind="section" node={firstSectionNode} label={t('card.background')}>
+  <WallCard id="node-background" style={place('node-background')} kind="section" node={2} label={t('card.background')}>
     <h2 class="section-title">{t('background.title')}</h2>
     <ol class="trace" role="list">
       {experiences.map((e, i) => (
@@ -112,7 +99,7 @@ const projectCount = (d: (typeof DOMAINS)[number]): number =>
   </WallCard>
 
   <!-- Skills, with the radial domain map -->
-  <WallCard id="node-skills" style={place("node-skills")} kind="section" node={firstSectionNode + 1} label={t('card.skills')}>
+  <WallCard id="node-skills" style={place('node-skills')} kind="section" node={3} label={t('card.skills')}>
     <h2 class="section-title">{t('skills.title')}</h2>
     <div class="skills-map">
       <TopologyMap lang={lang} graph={domainGraph} compact />
@@ -132,7 +119,7 @@ const projectCount = (d: (typeof DOMAINS)[number]): number =>
   </WallCard>
 
   <!-- Contact (placeholders until Léo provides details) -->
-  <WallCard id="node-contact" style={place("node-contact")} kind="section" node={firstSectionNode + 2} label={t('card.contact')}>
+  <WallCard id="node-contact" style={place('node-contact')} kind="section" node={4} label={t('card.contact')}>
     <h2 class="section-title">{t('contact.title')}</h2>
     <p class="muted">{t('contact.text')}</p>
     <ul class="channels" role="list">
@@ -330,10 +317,6 @@ const projectCount = (d: (typeof DOMAINS)[number]): number =>
     font-size: var(--fs-xl);
   }
 
-  .project-title {
-    font-size: var(--fs-xl);
-  }
-
   .muted {
     color: var(--c-text-muted);
   }
@@ -362,56 +345,57 @@ const projectCount = (d: (typeof DOMAINS)[number]): number =>
     }
   }
 
-  /* Whole project card clickable, through its title link (accessible pattern) */
-  .stretched {
-    text-decoration: none;
-  }
-
-  .stretched::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    border-radius: inherit;
-  }
-
-  .stretched:focus-visible {
-    outline: none;
-  }
-
-  .stretched:focus-visible::after {
-    outline: 2px solid var(--c-accent);
-    outline-offset: 3px;
-  }
-
   /* ---- Lists ---- */
-  .tags,
-  .tally,
+  .titles,
   .channels,
   .trace {
     padding: 0;
     list-style: none;
   }
 
-  .tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    margin-top: auto;
-  }
-
-  .tags li {
-    padding: 2px var(--space-2);
-    border: var(--line) solid var(--c-line-strong);
-    border-radius: var(--radius);
-  }
-
-  .tally li,
   .channels li {
     display: flex;
     justify-content: space-between;
     padding-block: var(--space-2);
     border-bottom: var(--line) dashed var(--c-line);
+  }
+
+  /* ---- Projects card ---- */
+  .mosaic {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 1px; /* the gaps show the line color: a fine grid between thumbnails */
+    height: 100%;
+    background: var(--c-line);
+  }
+
+  .mosaic :global(.tag) {
+    display: none; /* thumbnails are too small for their label */
+  }
+
+  .titles li {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    gap: 0 var(--space-2);
+    padding-block: var(--space-2);
+    border-bottom: var(--line) dashed var(--c-line);
+  }
+
+  .titles li > :last-child {
+    grid-column: 2;
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+  }
+
+  .cta {
+    margin-top: auto;
+    color: var(--c-accent);
+    transition: translate var(--dur-fast) var(--ease-out);
+  }
+
+  :global(.card--hub):hover .cta {
+    translate: 4px 0;
   }
 
   .trace li {

@@ -8,7 +8,10 @@ Bilingual (FR/EN) personal portfolio. Art direction **« Topologie »**: the sit
 
 ## Home page: the "topological wall"
 Inspired by allanleone.com, but in a blueprint style.
-- **Cards**: Léo (center, largest), Parcours, Skills, Contact, a Projets hub card, and one card per project.
+- **Cards** (5, in a cross around Léo): Léo (center, largest), Projets (east), Parcours (west), Skills (south), Contact (north). Individual projects are NOT on the wall.
+- **Projects**: the Projets card (mosaic of project thumbnails + titles) links to `/projets/` (`/en/projects/`), which lists every project; each project then gets `/projets/[slug]`. The card and the page head share `view-transition-name: projects-card` (native CSS cross-document view transitions).
+- **Back links** to the wall use a hash (`/#node-projects`): the wall opens centered on that card.
+- **Translated URL segments** live in `SEGMENTS` in `src/i18n/routes.ts`; always build URLs with its helpers.
 - **Wires**: orthogonal wires join the cards through small square "ports".
 - **Interaction**: the wall is draggable (pointer events, inertia, elastic bounds; bounded, not infinite) and slightly curved using CSS 3D per-card transforms (no WebGL). Cards have a glass edge.
 - **Navigation**: a floating bottom pill bar (Projets · Parcours · Skills · Contact · Lens · List) flies the camera to a card.

@@ -364,13 +364,22 @@ export function initWall(): void {
     computeBounds();
   };
 
-  const leo = document.getElementById('node-leo');
+  // Opening card: the one named in the URL hash ("/#node-projects", used by
+  // "back to the wall" links), otherwise Léo's card
+  const hashTarget = location.hash ? document.getElementById(location.hash.slice(1)) : null;
+  const startCard = hashTarget?.matches('[data-node]') ? hashTarget : document.getElementById('node-leo');
+
+  const centerOnStart = (): void => {
+    if (!startCard) return;
+    const b = boxOf(startCard);
+    Object.assign(cam, centerOn({ x: b.x + b.w / 2, y: b.y + Math.min(b.h, wall.clientHeight) / 2 }));
+    render();
+  };
+
   layout();
-  if (leo) {
-    const b = boxOf(leo);
-    Object.assign(cam, centerOn({ x: b.x + b.w / 2, y: b.y + b.h / 2 }));
-  }
-  render();
+  centerOnStart();
+  // The hash also makes the browser scroll the page toward the card: undo it
+  if (hashTarget) requestAnimationFrame(() => window.scrollTo(0, 0));
 
   // Size changes (window resize, fonts loaded) move ports: redraw and re-bound
   new ResizeObserver(() => {
@@ -379,10 +388,6 @@ export function initWall(): void {
   }).observe(wall);
   void document.fonts.ready.then(() => {
     layout();
-    if (leo && !userMoved) {
-      const b = boxOf(leo);
-      Object.assign(cam, centerOn({ x: b.x + b.w / 2, y: b.y + b.h / 2 }));
-      render();
-    }
+    if (!userMoved) centerOnStart();
   });
 }

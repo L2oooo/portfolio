@@ -1,0 +1,145 @@
+---
+/*
+ * ProjectsPage — the projects index, shared by "/projets/" (fr) and
+ * "/en/projects/" (en). Its head panel shares the view-transition name of
+ * the wall's Projects card, so the card visually turns into this page.
+ */
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import Base from '../layouts/Base.astro';
+import Header from './Header.astro';
+import TitleBlock from './TitleBlock.astro';
+import ProjectCard from './wall/ProjectCard.astro';
+import { useTranslations, type Lang } from '../i18n/ui';
+import { getProjects } from '../lib/content';
+import { DOMAINS } from '../data/domains';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const pad = (n: number): string => String(n).padStart(2, '0');
+
+const projects = await getProjects(lang);
+// Back to the wall, centered on the Projects card (see src/scripts/wall.ts)
+const backHref = `${getRelativeLocaleUrl(lang, '')}#node-projects`;
+const projectCount = (d: (typeof DOMAINS)[number]): number =>
+  projects.filter((p) => p.data.domains.includes(d)).length;
+---
+
+<Base title={t('projects.metaTitle')} description={t('hub.text')} lang={lang}>
+  <Header lang={lang} annotation={`fig.02 — ${t('card.hub')}`} />
+
+  <main class="page">
+    <section class="head" aria-labelledby="projects-title">
+      <div class="head-bar mono">
+        <span>node: 01 · {t('card.hub')}</span>
+        <span>{pad(projects.length)}</span>
+      </div>
+      <div class="head-body">
+        <a href={backHref} class="back mono">← {t('projects.back')}</a>
+        <h1 id="projects-title">{t('hub.title')}</h1>
+        <p class="intro">{t('hub.text')}</p>
+        <ul class="tally" role="list">
+          {DOMAINS.map((d) => (
+            <li class="mono">
+              {t(`domain.${d}`)} <span>{pad(projectCount(d))}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <ol class="grid" role="list">
+      {projects.map((p, i) => (
+        <li>
+          <ProjectCard lang={lang} project={p} index={i + 1} />
+        </li>
+      ))}
+    </ol>
+  </main>
+
+  <TitleBlock lang={lang} />
+</Base>
+
+<style>
+  .page {
+    max-width: var(--max-width);
+    margin-inline: auto;
+    padding: var(--space-6) var(--gutter) var(--space-8);
+  }
+
+  /* Same look as a wall card: it is the Projects card, "opened" */
+  .head {
+    margin-bottom: var(--space-6);
+    background: var(--c-surface);
+    border: var(--line) solid var(--c-line-strong);
+    border-radius: 12px;
+    view-transition-name: projects-card;
+  }
+
+  .head-bar {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    border-bottom: var(--line) solid var(--c-line);
+  }
+
+  .head-body {
+    display: grid;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-4) var(--space-6);
+  }
+
+  .back {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    text-decoration: none;
+    color: var(--c-text-muted);
+  }
+
+  .back:hover {
+    color: var(--c-accent);
+  }
+
+  h1 {
+    font-size: var(--fs-display);
+  }
+
+  .intro {
+    max-width: 48ch;
+    font-size: var(--fs-lg);
+    color: var(--c-text-muted);
+  }
+
+  .tally {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+    padding: 0;
+    list-style: none;
+  }
+
+  .tally span {
+    color: var(--c-text);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    gap: var(--space-5);
+    padding: 0;
+    list-style: none;
+  }
+
+  .grid li {
+    display: flex;
+  }
+
+  .grid li > :global(.card) {
+    flex: 1;
+  }
+</style>

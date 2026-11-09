@@ -1,0 +1,30 @@
+---
+/*
+ * TitleBlock — the page footer, styled like the title block of a technical
+ * drawing (author, revision, scale). Shared by every page.
+ */
+import { useTranslations, type Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+
+const t = useTranslations(Astro.props.lang);
+---
+
+<footer class="titleblock">
+  <span class="mono">{t('footer.drawnBy')}</span>
+  <span class="mono">rev: 0.4</span>
+  <span class="mono">scale: 1:1</span>
+</footer>
+
+<style>
+  .titleblock {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--gutter);
+    border-top: var(--line) solid var(--c-line);
+  }
+</style>

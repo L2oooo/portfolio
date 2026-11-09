@@ -93,6 +93,31 @@ a:hover {
   color: var(--c-text-muted);
 }
 
+/*
+ * Whole card clickable through ONE real link (accessible pattern): the link's
+ * ::after covers its nearest positioned ancestor (the card).
+ */
+.stretched-link {
+  text-decoration: none;
+}
+
+.stretched-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+}
+
+.stretched-link:focus-visible {
+  outline: none;
+}
+
+.stretched-link:focus-visible::after {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 3px;
+}
+
 /* ---- Accessibility ---- */
 :focus-visible {
   outline: 2px solid var(--c-accent);
@@ -125,5 +150,27 @@ a:hover {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Cross-page view transitions (native CSS, no JS): elements sharing a
+ * view-transition-name (e.g. the wall's Projects card and the projects page
+ * head) morph into each other. Browsers without support just navigate.
+ */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-group(*) {
+  animation-duration: 450ms;
+  animation-timing-function: var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }

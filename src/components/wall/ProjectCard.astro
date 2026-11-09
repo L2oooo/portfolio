@@ -1,0 +1,65 @@
+---
+/*
+ * ProjectCard — one project as a card: visual, title (link to the project
+ * page, clickable over the whole card), one-line summary and domain tags.
+ * Used on the projects index page.
+ */
+import WallCard from './WallCard.astro';
+import BlueprintPlaceholder from './BlueprintPlaceholder.astro';
+import { useTranslations, type Lang } from '../../i18n/ui';
+import { projectPath } from '../../i18n/routes';
+import type { Project } from '../../lib/content';
+
+interface Props {
+  lang: Lang;
+  project: Project;
+  index: number; // 1-based position in the list
+}
+
+const { lang, project, index } = Astro.props;
+const t = useTranslations(lang);
+const pad = (n: number): string => String(n).padStart(2, '0');
+---
+
+<WallCard
+  id={`node-${project.slug}`}
+  kind="project"
+  node={index}
+  label={`${t('card.project')} ${pad(index)}`}
+  meta={String(project.data.year)}
+  domains={project.data.domains}
+>
+  <BlueprintPlaceholder slot="visual" seed={project.slug} />
+  <h2 class="title">
+    <a href={projectPath(lang, project.slug)} class="stretched-link">{project.data.title}</a>
+  </h2>
+  <p class="summary">{project.data.summary}</p>
+  <ul class="tags" role="list">
+    {project.data.domains.map((d) => <li class="mono">{t(`domain.${d}`)}</li>)}
+  </ul>
+</WallCard>
+
+<style>
+  .title {
+    font-size: var(--fs-xl);
+  }
+
+  .summary {
+    color: var(--c-text-muted);
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: auto;
+    padding: 0;
+    list-style: none;
+  }
+
+  .tags li {
+    padding: 2px var(--space-2);
+    border: var(--line) solid var(--c-line-strong);
+    border-radius: var(--radius);
+  }
+</style>

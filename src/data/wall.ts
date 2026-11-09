@@ -1,18 +1,18 @@
 /*
- * Wall layout — where each card sits on the wall's plane, and which ports
- * are wired together. Pure data, computed at build time, in two size sets:
- * DESKTOP and MOBILE (same topology, narrower cards on phones so text stays
- * full size).
+ * Wall layout — where each of the 5 cards sits on the wall's plane, and which
+ * ports are wired together. Pure data, computed at build time, in two size
+ * sets: DESKTOP and MOBILE (same topology, narrower cards on phones so text
+ * stays full size).
  *
  * Plane coordinates are in px, origin (0, 0) = center of Léo's card.
  * `align` says which point of the card (x, y) refers to, so a card can be
  * anchored by its bottom edge without knowing its height in advance:
  *
- *                 [ Contact ]
- *                      │
- *   [ Background ]── [ Léo ] ──[ Projects ]──┬─────┬─────┬── bus
- *                      │                    [P1]  [P3]  [P5]   above
- *                  [ Skills ]               [P2]  [P4]  [P6]   below
+ *                  [ Contact ]
+ *                       │
+ *   [ Background ] ── [ Léo ] ── [ Projects ]
+ *                       │
+ *                   [ Skills ]
  */
 
 export type Side = 'n' | 'e' | 's' | 'w';
@@ -41,12 +41,9 @@ export interface WallLayout {
 /** Sizes of one layout variant. */
 export interface WallMetrics {
   gap: number; // space between Léo and the cards around him
-  busGap: number; // space between the bus line and the project cards
   leoWidth: number;
   leoHalfHeight: number; // expected half height of Léo's card: keeps contact/skills clear of it
-  hubWidth: number;
-  projectWidth: number;
-  projectSpacing: number; // space between two project columns
+  projectsWidth: number;
   contactWidth: number;
   skillsWidth: number;
   backgroundWidth: number;
@@ -54,12 +51,9 @@ export interface WallMetrics {
 
 export const DESKTOP: WallMetrics = {
   gap: 120,
-  busGap: 64,
   leoWidth: 760,
   leoHalfHeight: 220,
-  hubWidth: 320,
-  projectWidth: 360,
-  projectSpacing: 64,
+  projectsWidth: 440,
   contactWidth: 380,
   skillsWidth: 440,
   backgroundWidth: 420,
@@ -67,21 +61,16 @@ export const DESKTOP: WallMetrics = {
 
 export const MOBILE: WallMetrics = {
   gap: 72,
-  busGap: 48,
   leoWidth: 320,
   leoHalfHeight: 330,
-  hubWidth: 280,
-  projectWidth: 300,
-  projectSpacing: 48,
+  projectsWidth: 320,
   contactWidth: 300,
   skillsWidth: 320,
   backgroundWidth: 320,
 };
 
-export function buildWall(projectIds: string[], m: WallMetrics): WallLayout {
+export function buildWall(m: WallMetrics): WallLayout {
   const half = m.leoWidth / 2;
-  const hubRight = half + m.gap + m.hubWidth;
-  const projectStep = m.projectWidth + m.projectSpacing;
 
   const placements: Record<string, Placement> = {
     'node-leo': { x: 0, y: 0, width: m.leoWidth, alignX: 'center', alignY: 'center' },
@@ -106,35 +95,20 @@ export function buildWall(projectIds: string[], m: WallMetrics): WallLayout {
       alignX: 'end',
       alignY: 'center',
     },
-    'node-projects': { x: half + m.gap, y: 0, width: m.hubWidth, alignX: 'start', alignY: 'center' },
-  };
-
-  // Projects alternate above / below the bus, filling columns left to right
-  projectIds.forEach((id, i) => {
-    const column = Math.floor(i / 2);
-    const above = i % 2 === 0;
-    placements[id] = {
-      x: hubRight + m.gap + column * projectStep,
-      y: above ? -m.busGap : m.busGap,
-      width: m.projectWidth,
+    'node-projects': {
+      x: half + m.gap,
+      y: 0,
+      width: m.projectsWidth,
       alignX: 'start',
-      alignY: above ? 'end' : 'start',
-    };
-  });
+      alignY: 'center',
+    },
+  };
 
   const links: WallLink[] = [
     { from: 'node-leo', fromSide: 'n', to: 'node-contact', toSide: 's' },
     { from: 'node-leo', fromSide: 's', to: 'node-skills', toSide: 'n' },
     { from: 'node-leo', fromSide: 'w', to: 'node-background', toSide: 'e' },
     { from: 'node-leo', fromSide: 'e', to: 'node-projects', toSide: 'w' },
-    ...projectIds.map(
-      (id, i): WallLink => ({
-        from: 'node-projects',
-        fromSide: 'e',
-        to: id,
-        toSide: i % 2 === 0 ? 's' : 'n',
-      }),
-    ),
   ];
 
   return { placements, links };

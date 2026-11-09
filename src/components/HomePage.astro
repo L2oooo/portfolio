@@ -1,12 +1,11 @@
 ---
 /*
- * HomePage — the home page content, shared by "/" (fr) and "/en/" (en).
- * Header + the card wall + the drawing's title block (footer).
- * For now the wall renders as its list view; it becomes the draggable,
- * wired wall in the next steps.
+ * HomePage — the home page content, shared by "/" (fr) and "/en/" (en):
+ * header, the card wall, and the drawing's title block.
  */
 import Base from '../layouts/Base.astro';
 import Header from './Header.astro';
+import TitleBlock from './TitleBlock.astro';
 import Wall from './wall/Wall.astro';
 import { useTranslations, type Lang } from '../i18n/ui';
 
@@ -20,25 +19,8 @@ const t = useTranslations(lang);
 
 <Base title={t('meta.title')} description={t('meta.description')} lang={lang}>
   <Header lang={lang} annotation={t('map.fig')} />
-
   <main>
     <Wall lang={lang} />
   </main>
-
-  <footer class="titleblock">
-    <span class="mono">{t('footer.drawnBy')}</span>
-    <span class="mono">rev: 0.3</span>
-    <span class="mono">scale: 1:1</span>
-  </footer>
+  <TitleBlock lang={lang} />
 </Base>
-
-<style>
-  .titleblock {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--gutter);
-    border-top: var(--line) solid var(--c-line);
-  }
-</style>
