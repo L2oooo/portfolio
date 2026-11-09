@@ -1,0 +1,280 @@
+---
+/*
+ * TopologyMap — the signature "network map" of the home page, as static SVG.
+ * Draws the blueprint decorations (axes, orbits, dial ticks), the links and
+ * the nodes computed by buildGraph(). Rendered at build time: zero JS needed
+ * to display it. Interactions (hover/focus highlighting) come at step 5b.
+ * Data attributes (data-domain, data-project) are already in place for them.
+ */
+import { MAP, type Graph, type Point } from '../data/graph';
+import { useTranslations, type Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+  graph: Graph;
+}
+
+const { lang, graph } = Astro.props;
+const t = useTranslations(lang);
+const pad = (n: number): string => String(n).padStart(2, '0');
+
+const { cx, cy, innerRadius, outerRadius } = MAP;
+const rad = (d: number): number => (d * Math.PI) / 180;
+const at = (angle: number, r: number): Point => ({
+  x: Math.round((cx + r * Math.cos(rad(angle))) * 10) / 10,
+  y: Math.round((cy + r * Math.sin(rad(angle))) * 10) / 10,
+});
+
+// Label placement: to the right, left, above or below a node depending on its angle
+type Anchor = 'start' | 'middle' | 'end';
+function labelAt(angle: number, r: number, gap: number): Point & { anchor: Anchor; below: boolean } {
+  const cos = Math.cos(rad(angle));
+  const sin = Math.sin(rad(angle));
+  const p = at(angle, r + gap);
+  const anchor: Anchor = cos > 0.3 ? 'start' : cos < -0.3 ? 'end' : 'middle';
+  return { ...p, anchor, below: sin > 0 };
+}
+
+// Dial ticks on the outer orbit: every 5°, longer every 30°
+const ticks = Array.from({ length: 72 }, (_, i) => i * 5).map((a) => {
+  const major = a % 30 === 0;
+  const len = major ? 10 : 4;
+  return { from: at(a, outerRadius - len), to: at(a, outerRadius + len), major };
+});
+// Compass bearings: 000° is north (top), clockwise, like on a chart.
+// SVG angles start at "east", so bearing = svgAngle + 90. A bearing label is
+// skipped when a project sits close to it, to avoid overlapping labels.
+const angleGap = (a: number, b: number): number => Math.abs((((a - b) % 360) + 540) % 360 - 180);
+const bearings = [-90, 0, 90, 180]
+  .filter((a) => graph.projects.every((p) => angleGap(p.angle, a) > 14))
+  .map((a) => ({
+    label: `${String((a + 90 + 360) % 360).padStart(3, '0')}°`,
+    ...at(a, outerRadius - 30),
+  }));
+---
+
+<svg
+  class="topology"
+  viewBox="-130 30 1260 940"
+  role="img"
+  aria-labelledby="map-title map-desc"
+>
+  <title id="map-title">{t('map.title')}</title>
+  <desc id="map-desc">{t('map.desc')}</desc>
+
+  <!-- Blueprint scaffolding -->
+  <g class="scaffold" aria-hidden="true">
+    <line x1={cx - outerRadius - 60} y1={cy} x2={cx + outerRadius + 60} y2={cy} />
+    <line x1={cx} y1={cy - outerRadius - 60} x2={cx} y2={cy + outerRadius + 60} />
+    <circle cx={cx} cy={cy} r={innerRadius} class="orbit" />
+    <circle cx={cx} cy={cy} r={outerRadius} class="orbit outer" />
+    {ticks.map((tk) => (
+      <line x1={tk.from.x} y1={tk.from.y} x2={tk.to.x} y2={tk.to.y} class:list={['tick', { major: tk.major }]} />
+    ))}
+    {bearings.map((b) => (
+      <text x={b.x} y={b.y} class="bearing" text-anchor="middle" dominant-baseline="middle">{b.label}</text>
+    ))}
+  </g>
+
+  <!-- Links -->
+  <g class="links" aria-hidden="true">
+    {graph.links.map((l) => (
+      <line
+        x1={l.from.x}
+        y1={l.from.y}
+        x2={l.to.x}
+        y2={l.to.y}
+        class:list={['link', l.kind]}
+        data-domain={l.domain}
+        data-project={l.project}
+      />
+    ))}
+  </g>
+
+  <!-- Projects (outer ring) -->
+  <g class="projects">
+    {graph.projects.map((p) => {
+      const l = labelAt(p.angle, outerRadius, 20);
+      return (
+        <g class="node project" data-project={p.slug} data-domains={p.domains.join(' ')}>
+          <circle cx={p.x} cy={p.y} r="8" class="mark" />
+          <text x={l.x} y={l.y} text-anchor={l.anchor} dominant-baseline={l.below ? 'hanging' : 'auto'}>
+            <tspan class="p-num">{pad(p.index)}</tspan>
+            <tspan class="p-title" dx="10">{p.title}</tspan>
+          </text>
+        </g>
+      );
+    })}
+  </g>
+
+  <!-- Domains (inner ring) -->
+  <g class="domains">
+    {graph.domains.map((d, i) => {
+      const l = labelAt(d.angle, innerRadius, 24);
+      return (
+        <g class="node domain" data-domain={d.id}>
+          <rect x={d.x - 9} y={d.y - 9} width="18" height="18" class="mark" />
+          <text x={l.x} y={l.y} text-anchor={l.anchor} dominant-baseline={l.below ? 'hanging' : 'auto'} class="d-label">
+            {t(`domain.${d.id}`)}
+          </text>
+          <text
+            x={l.x}
+            y={l.y + (l.below ? 34 : -30)}
+            text-anchor={l.anchor}
+            dominant-baseline={l.below ? 'hanging' : 'auto'}
+            class="d-index"
+          >
+            d.{pad(i + 1)}
+          </text>
+        </g>
+      );
+    })}
+  </g>
+
+  <!-- Root -->
+  <g class="node root">
+    <rect x={cx - 34} y={cy - 34} width="68" height="68" class="mark" />
+    <text x={cx} y={cy + 2} text-anchor="middle" dominant-baseline="middle" class="r-label">LÉO</text>
+    <rect x={cx + 26} y={cy - 42} width="8" height="8" class="r-dot" />
+  </g>
+</svg>
+
+<style>
+  .topology {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  /* ---- Scaffolding: present but quiet ---- */
+  .scaffold line {
+    stroke: var(--c-line);
+    stroke-width: 1;
+    stroke-dasharray: 2 6;
+  }
+
+  .orbit {
+    fill: none;
+    stroke: var(--c-line);
+    stroke-width: 1;
+    stroke-dasharray: 4 6;
+  }
+
+  .orbit.outer {
+    stroke-dasharray: none;
+  }
+
+  .scaffold .tick {
+    stroke: var(--c-line-strong);
+    stroke-dasharray: none;
+  }
+
+  .scaffold .tick.major {
+    stroke: var(--c-text-muted);
+  }
+
+  .bearing {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    fill: var(--c-text-muted);
+  }
+
+  /* ---- Links ---- */
+  .link {
+    stroke: var(--c-line-strong);
+    stroke-width: 1.25;
+  }
+
+  /* Secondary links: dashed, but visible enough to read the cross-domain story */
+  .link.project {
+    stroke: var(--c-text-muted);
+    stroke-opacity: 0.6;
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+  }
+
+  /* ---- Nodes ---- */
+  .mark {
+    fill: var(--c-bg);
+    stroke: var(--c-text);
+    stroke-width: 2;
+  }
+
+  .project text {
+    fill: var(--c-text);
+  }
+
+  .p-num {
+    font-family: var(--font-mono);
+    font-size: 17px;
+    fill: var(--c-text-muted);
+  }
+
+  .p-title {
+    font-family: var(--font-sans);
+    font-size: 24px;
+  }
+
+  .d-label {
+    font-family: var(--font-sans);
+    font-stretch: var(--stretch-display);
+    font-weight: 700;
+    font-size: 34px;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    fill: var(--c-text);
+  }
+
+  .d-index {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    fill: var(--c-text-muted);
+  }
+
+  .root .mark {
+    fill: var(--c-text);
+    stroke: var(--c-text);
+  }
+
+  .r-label {
+    font-family: var(--font-sans);
+    font-stretch: var(--stretch-display);
+    font-weight: 800;
+    font-size: 24px;
+    fill: var(--c-bg);
+  }
+
+  .r-dot {
+    fill: var(--c-accent);
+  }
+
+  /* ---- Small screens: numbers only, bigger type (the index below has the titles) ---- */
+  @media (max-width: 699px) {
+    /* The viewBox keeps side room for project titles, hidden here:
+       zoom in and crop that empty room (the parent clips the overflow) */
+    .topology {
+      width: 130%;
+      max-width: none; /* overrides the global svg max-width reset */
+      margin-left: -15%;
+    }
+
+    .p-title,
+    .d-index,
+    .bearing {
+      display: none;
+    }
+
+    .p-num {
+      font-size: 40px;
+      fill: var(--c-text);
+    }
+
+    .d-label {
+      font-size: 48px;
+    }
+
+    .r-label {
+      font-size: 26px;
+    }
+  }
+</style>

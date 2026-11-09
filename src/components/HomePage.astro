@@ -1,14 +1,16 @@
 ---
 /*
  * HomePage — the home page content, shared by "/" (fr) and "/en/" (en).
- * TEMPORARY design-system specimen ("fig.00"): lets us judge colors,
- * typography, lines and both themes before building the real topology map.
- * Will be replaced at step 5.
+ * Hero = identity column + the topology map (fig.01).
+ * Below: a TEMPORARY raw index of projects and background, replaced by the
+ * real sections at step 7.
  */
 import Base from '../layouts/Base.astro';
 import Header from './Header.astro';
+import TopologyMap from './TopologyMap.astro';
 import { useTranslations, type Lang } from '../i18n/ui';
 import { getProjects, getExperiences } from '../lib/content';
+import { buildGraph } from '../data/graph';
 
 interface Props {
   lang: Lang;
@@ -19,161 +21,103 @@ const t = useTranslations(lang);
 
 const projects = await getProjects(lang);
 const experiences = await getExperiences(lang);
+const graph = buildGraph(
+  projects.map((p) => ({ slug: p.slug, title: p.data.title, year: p.data.year, domains: p.data.domains })),
+);
+const nodeCount = 1 + graph.domains.length + graph.projects.length;
 const pad = (n: number): string => String(n).padStart(2, '0');
-
-const swatches = [
-  { name: 'bg', token: '--c-bg' },
-  { name: 'surface', token: '--c-surface' },
-  { name: 'line', token: '--c-line' },
-  { name: 'text', token: '--c-text' },
-  { name: 'muted', token: '--c-text-muted' },
-  { name: 'accent', token: '--c-accent' },
-];
-
-const scale = [
-  { label: 'display', size: 'var(--fs-xl)', stretch: 'var(--stretch-display)', text: lang === 'fr' ? 'IA × CYBER × PRODUIT' : 'AI × CYBER × PRODUCT' },
-  { label: 'lg', size: 'var(--fs-lg)', stretch: 'var(--stretch-body)', text: t('hero.tagline') },
-  { label: 'base', size: 'var(--fs-base)', stretch: 'var(--stretch-body)', text: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.' },
-];
 ---
 
 <Base title={t('meta.title')} description={t('meta.description')} lang={lang}>
-  <Header lang={lang} annotation={t('specimen.fig')} />
+  <Header lang={lang} annotation={t('map.fig')} />
 
   <main class="sheet">
     <section class="hero" aria-labelledby="hero-title">
-      <p class="mono annot">node: 00 · root</p>
-      <h1 id="hero-title">Léo<br />Salvayre<span class="dot" aria-hidden="true"></span></h1>
-      <div class="hero-meta">
-        <p class="mono"><span class="status" aria-hidden="true"></span>{t('hero.status')}</p>
-        <p class="mono">{t('hero.loc')}</p>
-        <p class="mono">{t('hero.links')}</p>
+      <div class="identity">
+        <p class="mono">node: 00 · root</p>
+        <h1 id="hero-title">Léo<br />Salvayre<span class="dot" aria-hidden="true"></span></h1>
+        <p class="tagline">{t('hero.tagline')}</p>
+        <ul class="meta" role="list">
+          <li class="mono"><span class="status" aria-hidden="true"></span>{t('hero.status')}</li>
+          <li class="mono">{t('hero.loc')}</li>
+          <li class="mono">{pad(nodeCount)} {t('hero.nodes')} · {pad(graph.links.length)} {t('hero.linksLabel')}</li>
+        </ul>
       </div>
+
+      <figure class="map">
+        <TopologyMap lang={lang} graph={graph} />
+        <figcaption class="legend mono">
+          <span>{t('map.fig')}</span>
+          <span class="key"><i class="k-root" aria-hidden="true"></i>{t('map.legend.root')}</span>
+          <span class="key"><i class="k-domain" aria-hidden="true"></i>{t('map.legend.domain')}</span>
+          <span class="key"><i class="k-project" aria-hidden="true"></i>{t('map.legend.project')}</span>
+          <span class="key"><i class="k-link" aria-hidden="true"></i>{t('map.legend.link')}</span>
+        </figcaption>
+      </figure>
     </section>
 
-    <section class="block" aria-labelledby="color-title">
-      <header class="block-head">
-        <span class="mono">01</span>
-        <h2 id="color-title">{t('specimen.color')}</h2>
-      </header>
-      <ul class="swatches">
-        {swatches.map((s) => (
+    <!-- Temporary raw index (step 7 replaces it) -->
+    <section class="block" aria-labelledby="index-title">
+      <h2 id="index-title" class="mono">{t('content.projects')} · {projects.length}</h2>
+      <ol class="rows">
+        {projects.map((p, i) => (
           <li>
-            <span class="chip" style={`background: var(${s.token})`}></span>
-            <span class="mono">{s.name}</span>
+            <span class="mono">{pad(i + 1)}</span>
+            <span>{p.data.title}</span>
+            <span class="mono">{p.data.domains.map((d) => t(`domain.${d}`)).join(' · ')}</span>
+            <span class="mono">{p.data.year}</span>
           </li>
         ))}
-      </ul>
-    </section>
-
-    <section class="block" aria-labelledby="type-title">
-      <header class="block-head">
-        <span class="mono">02</span>
-        <h2 id="type-title">{t('specimen.type')}</h2>
-      </header>
-      <dl class="scale">
-        {scale.map((row) => (
-          <div class="scale-row">
-            <dt class="mono">{row.label}</dt>
-            <dd style={`font-size: ${row.size}; font-stretch: ${row.stretch}`}>{row.text}</dd>
-          </div>
+      </ol>
+      <h2 class="mono">{t('content.experiences')} · {experiences.length}</h2>
+      <ol class="rows">
+        {experiences.map((e) => (
+          <li>
+            <span class="mono">{e.data.start.slice(0, 4)}</span>
+            <span>{e.data.org}</span>
+            <span class="mono">{e.data.role}</span>
+            <span class="mono">{e.data.end?.slice(0, 4) ?? t('content.present')}</span>
+          </li>
         ))}
-        <div class="scale-row">
-          <dt class="mono">mono</dt>
-          <dd class="mono specimen-mono">fig.01 — node: 12 — lens: cyber — status: open</dd>
-        </div>
-      </dl>
-    </section>
-
-    <section class="block" aria-labelledby="line-title">
-      <header class="block-head">
-        <span class="mono">03</span>
-        <h2 id="line-title">{t('specimen.line')}</h2>
-      </header>
-      <!-- Preview of the map vocabulary: nodes, links, active path -->
-      <svg class="mini-map" viewBox="0 0 600 180" aria-hidden="true">
-        <line x1="60" y1="90" x2="300" y2="90" class="link" />
-        <line x1="300" y1="90" x2="540" y2="40" class="link active" />
-        <line x1="300" y1="90" x2="540" y2="140" class="link" />
-        <circle cx="60" cy="90" r="6" class="node" />
-        <rect x="288" y="78" width="24" height="24" class="node root" />
-        <circle cx="540" cy="40" r="6" class="node active" />
-        <circle cx="540" cy="140" r="6" class="node" />
-        <text x="60" y="122" class="label" text-anchor="middle">{lang === 'fr' ? 'IA' : 'AI'}</text>
-        <text x="300" y="130" class="label" text-anchor="middle">LÉO</text>
-        <text x="540" y="22" class="label active" text-anchor="middle">CYBER</text>
-        <text x="540" y="172" class="label" text-anchor="middle">DEV</text>
-      </svg>
-    </section>
-
-    <!-- Temporary raw view of the content collections (step 4) -->
-    <section class="block" aria-labelledby="content-title">
-      <header class="block-head">
-        <span class="mono">04</span>
-        <h2 id="content-title">{t('specimen.content')}</h2>
-      </header>
-      <div class="content-preview">
-        <h3 class="mono">{t('content.projects')} · {projects.length}</h3>
-        <ol class="rows">
-          {projects.map((p, i) => (
-            <li>
-              <span class="mono">{pad(i + 1)}</span>
-              <span>{p.data.title}</span>
-              <span class="mono">{p.data.domains.map((d) => t(`domain.${d}`)).join(' · ')}</span>
-              <span class="mono">{p.data.year}</span>
-            </li>
-          ))}
-        </ol>
-        <h3 class="mono">{t('content.experiences')} · {experiences.length}</h3>
-        <ol class="rows">
-          {experiences.map((e) => (
-            <li>
-              <span class="mono">{e.data.start.slice(0, 4)}</span>
-              <span>{e.data.org}</span>
-              <span class="mono">{e.data.role}</span>
-              <span class="mono">{e.data.end?.slice(0, 4) ?? t('content.present')}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      </ol>
     </section>
   </main>
 
   <footer class="titleblock">
     <span class="mono">{t('footer.drawnBy')}</span>
-    <span class="mono">rev: 0.1</span>
+    <span class="mono">rev: 0.2</span>
     <span class="mono">scale: 1:1</span>
   </footer>
 </Base>
 
 <style>
-  .titleblock {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--gutter);
-    border-top: var(--line) solid var(--c-line);
-    margin-top: var(--space-8);
-  }
-
   .sheet {
     max-width: var(--max-width);
     margin-inline: auto;
     padding-inline: var(--gutter);
   }
 
-  /* ---- Hero ---- */
+  /* ---- Hero: identity + map ---- */
   .hero {
-    position: relative;
-    padding-block: var(--space-8) var(--space-7);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+    align-items: center;
+    padding-block: var(--space-7);
     border-bottom: var(--line) solid var(--c-line);
   }
 
-  .hero h1 {
+  @media (min-width: 1100px) {
+    .hero {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      min-height: calc(100dvh - 61px); /* full first screen minus the header */
+    }
+  }
+
+  .identity h1 {
     font-size: var(--fs-display);
     font-weight: 800;
-    margin-block: var(--space-3) var(--space-5);
+    margin-block: var(--space-3) var(--space-4);
   }
 
   .dot {
@@ -184,10 +128,19 @@ const scale = [
     background: var(--c-accent);
   }
 
-  .hero-meta {
+  .tagline {
+    max-width: 26ch;
+    font-size: var(--fs-lg);
+    line-height: 1.35;
+    margin-bottom: var(--space-5);
+  }
+
+  .meta {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2) var(--space-5);
+    padding: 0;
+    list-style: none;
   }
 
   .status {
@@ -210,136 +163,75 @@ const scale = [
     }
   }
 
-  /* ---- Blocks ---- */
-  .block {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-5);
-    padding-block: var(--space-7);
-    border-bottom: var(--line) solid var(--c-line);
+  /* ---- Map figure ---- */
+  .map {
+    margin: 0;
+    overflow-x: clip; /* the map zooms past its box on mobile: no horizontal scroll */
   }
 
-  @media (min-width: 900px) {
-    .block {
-      grid-template-columns: 16rem minmax(0, 1fr);
-    }
-  }
-
-  .block-head {
+  .legend {
     display: flex;
-    align-items: baseline;
-    gap: var(--space-3);
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: var(--line) solid var(--c-line);
   }
 
-  .block-head h2 {
-    font-size: var(--fs-xl);
-  }
-
-  /* ---- Swatches ---- */
-  .swatches {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
-    gap: var(--space-4);
-    padding: 0;
-    list-style: none;
-  }
-
-  .swatches li {
-    display: grid;
-    gap: var(--space-1);
-  }
-
-  .chip {
-    aspect-ratio: 4 / 3;
-    margin-bottom: var(--space-2);
-    border: var(--line) solid var(--c-line-strong);
-  }
-
-  /* ---- Type scale ---- */
-  .scale {
-    display: grid;
-    gap: var(--space-4);
-  }
-
-  .scale-row {
-    display: grid;
-    grid-template-columns: 5rem minmax(0, 1fr);
-    gap: var(--space-3);
-    align-items: baseline;
-    padding-bottom: var(--space-4);
-    border-bottom: var(--line) dashed var(--c-line);
-  }
-
-  .scale-row:last-child {
-    border-bottom: 0;
-  }
-
-  .scale-row dd {
-    max-width: 60ch;
-  }
-
-  .specimen-mono {
-    font-size: var(--fs-sm);
+  .legend > span:first-child {
     color: var(--c-text);
+    margin-right: auto;
   }
 
-  /* ---- Mini map ---- */
-  .mini-map {
-    width: 100%;
-    max-width: 40rem;
-    overflow: visible;
+  .key {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
-  .link {
-    stroke: var(--c-line-strong);
-    stroke-width: 1;
+  .key i {
+    display: inline-block;
+    border: 1.5px solid var(--c-text);
   }
 
-  .link.active {
-    stroke: var(--c-accent);
-    stroke-dasharray: 6 4;
-    animation: flow 1.2s linear infinite;
+  .k-root {
+    width: 10px;
+    height: 10px;
+    background: var(--c-text);
   }
 
-  @keyframes flow {
-    to {
-      stroke-dashoffset: -20;
-    }
+  .k-domain {
+    width: 9px;
+    height: 9px;
   }
 
-  .node {
-    fill: var(--c-bg);
-    stroke: var(--c-text);
-    stroke-width: 1.5;
+  .k-project {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
   }
 
-  .node.root {
-    fill: var(--c-text);
+  .key i.k-link {
+    width: 18px;
+    height: 0;
+    border-width: 0;
+    border-top: 1.5px dashed var(--c-text-muted);
   }
 
-  .node.active {
-    fill: var(--c-accent);
-    stroke: var(--c-accent);
+  /* ---- Temporary index ---- */
+  .block {
+    padding-block: var(--space-7);
   }
 
-  .label {
+  .block h2 {
     font-family: var(--font-mono);
-    font-size: 12px;
-    fill: var(--c-text-muted);
-  }
-
-  .label.active {
-    fill: var(--c-accent);
-  }
-
-  /* ---- Content preview ---- */
-  .content-preview h3 {
-    font-stretch: var(--stretch-body);
+    font-size: var(--fs-xs);
     font-weight: 400;
+    font-stretch: var(--stretch-body);
     margin-bottom: var(--space-2);
   }
 
-  .content-preview h3:not(:first-child) {
+  .block h2:not(:first-child) {
     margin-top: var(--space-6);
   }
 
@@ -365,5 +257,15 @@ const scale = [
   .rows li > :nth-child(4) {
     grid-column: 3;
     grid-row: 1;
+  }
+
+  /* ---- Title block ---- */
+  .titleblock {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--gutter);
+    border-top: var(--line) solid var(--c-line);
   }
 </style>
