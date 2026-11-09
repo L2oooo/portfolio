@@ -18,6 +18,13 @@
   --c-accent: #ff5b1f;      /* signal orange — 6.1:1 on bg */
   --c-accent-ink: #0e1013;  /* text placed on top of the accent */
 
+  /* Glass edge of the wall cards (effect colors, not UI colors) */
+  --glass-rim-hi: rgb(255 255 255 / 0.22); /* lit edge, top-left */
+  --glass-rim-lo: rgb(255 255 255 / 0.05); /* edge in the shade */
+  --glass-sheen: rgb(255 255 255 / 0.05); /* reflection sliding over the card */
+  --fringe-warm: rgb(255 91 31 / 0.45); /* chromatic aberration, warm side */
+  --fringe-cool: rgb(110 170 255 / 0.4); /* chromatic aberration, cool side */
+
   color-scheme: dark;
 
   /* ---- Typography ---- */
@@ -74,6 +81,12 @@
   --c-text-muted: #5c6068; /* 5.7:1 on bg */
   --c-accent: #c2410c;     /* deeper orange — 4.5:1 on bg (AA) */
   --c-accent-ink: #f2f0eb;
+
+  --glass-rim-hi: rgb(255 255 255 / 0.95);
+  --glass-rim-lo: rgb(17 19 22 / 0.14);
+  --glass-sheen: rgb(255 255 255 / 0.16); /* stronger washes out dark text on paper */
+  --fringe-warm: rgb(194 65 12 / 0.35);
+  --fringe-cool: rgb(40 110 220 / 0.3);
 
   color-scheme: light;
 }

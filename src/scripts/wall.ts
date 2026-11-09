@@ -3,9 +3,11 @@
  * When JavaScript runs it:
  *   1. switches the container to "wall mode" (cards absolutely placed on a
  *      plane, using the CSS variables written at build time),
- *   2. measures the cards and draws orthogonal wires between their ports,
- *   3. runs a camera: drag (mouse / touch), inertia, elastic edges, wheel
- *      panning, and auto-centering of the card that receives keyboard focus.
+ *   2. runs a camera: drag (mouse / touch), inertia, elastic edges, wheel
+ *      panning, and auto-centering of the card that receives keyboard focus,
+ *   3. curves the wall: each card tilts and shrinks with its distance from the
+ *      screen center (CSS 3D), and gets a glass reflection / lens fringe,
+ *   4. draws orthogonal wires between the real on-screen port positions.
  * Without JS the plain card list stays as is.
  * Exposes: initWall().
  */
@@ -39,6 +41,12 @@ const SPRING = 0.18; // how fast the wall springs back inside its bounds
 const EASE_TO = 0.14; // how fast the camera glides to a target card
 const EDGE_PADDING = 120; // how far past the outermost cards the camera may go
 
+// Curvature ("dome") settings
+const TILT_DEG = 14; // max rotation of a card one screen-half away from the center
+const SHRINK = 0.07; // scale lost per unit of squared distance
+const MIN_SCALE = 0.78;
+const PERSPECTIVE = 1600; // px, lower = stronger 3D
+
 function isSide(value: unknown): value is Side {
   return value === 'n' || value === 'e' || value === 's' || value === 'w';
 }
@@ -60,20 +68,6 @@ function parseLinks(raw: string | undefined): WallLink[] {
   }
 }
 
-/** Middle of one edge of a box. */
-function portPoint(b: Box, side: Side): Point {
-  switch (side) {
-    case 'n':
-      return { x: b.x + b.w / 2, y: b.y };
-    case 's':
-      return { x: b.x + b.w / 2, y: b.y + b.h };
-    case 'e':
-      return { x: b.x + b.w, y: b.y + b.h / 2 };
-    case 'w':
-      return { x: b.x, y: b.y + b.h / 2 };
-  }
-}
-
 /** Orthogonal path between two ports (right angles only, like a schematic). */
 function route(a: Point, aSide: Side, b: Point, bSide: Side): string {
   const horizontalA = aSide === 'e' || aSide === 'w';
@@ -91,6 +85,7 @@ function route(a: Point, aSide: Side, b: Point, bSide: Side): string {
 }
 
 const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v));
+const round = (v: number): number => Math.round(v * 1000) / 1000;
 
 export function initWall(): void {
   const wall = document.querySelector<HTMLElement>('[data-wall]');
@@ -100,6 +95,7 @@ export function initWall(): void {
 
   const links = parseLinks(wall.dataset.links);
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const cards = [...plane.querySelectorAll<HTMLElement>('[data-node]')];
 
   // ---- Camera state: plane translation (px) and zoom ----
   const cam = { x: 0, y: 0, scale: 1 };
@@ -109,23 +105,90 @@ export function initWall(): void {
   let frame = 0;
   let userMoved = false; // once the visitor moves the wall, never recenter on our own
 
+  // Flat card boxes in plane coordinates, measured once per layout (curvature ignored)
+  const boxes = new Map<HTMLElement, Box>();
+  const boxOf = (el: HTMLElement): Box => boxes.get(el) ?? { x: 0, y: 0, w: 0, h: 0 };
+
+  const measure = (): void => {
+    cards.forEach((c) => (c.style.transform = 'none')); // measure without the curvature
+    const p = plane.getBoundingClientRect();
+    for (const c of cards) {
+      const r = c.getBoundingClientRect();
+      boxes.set(c, {
+        x: (r.left - p.left) / cam.scale,
+        y: (r.top - p.top) / cam.scale,
+        w: r.width / cam.scale,
+        h: r.height / cam.scale,
+      });
+    }
+  };
+
+  // ---- Curvature: tilt + shrink each card by its distance to the screen center ----
+  const curve = (): void => {
+    const halfW = wall.clientWidth / 2;
+    const halfH = wall.clientHeight / 2;
+    const flat = reducedMotion.matches;
+    for (const c of cards) {
+      const b = boxOf(c);
+      // Card center on screen, relative to the wall center, in "screen halves"
+      const nx = clamp((cam.x + (b.x + b.w / 2) * cam.scale - halfW) / halfW, -2, 2);
+      const ny = clamp((cam.y + (b.y + b.h / 2) * cam.scale - halfH) / halfH, -2, 2);
+      const d2 = nx * nx + ny * ny;
+      c.style.setProperty('--nx', String(round(nx)));
+      c.style.setProperty('--ny', String(round(ny)));
+      c.style.setProperty('--ab', String(round(Math.min(1, Math.sqrt(d2) * 0.7))));
+      if (flat) {
+        c.style.transform = 'none';
+        continue;
+      }
+      // Cards turn their far edge away from the viewer: a dome bulging toward us
+      // (checked visually: a card on the right gets a smaller right edge)
+      const rotY = round(nx * TILT_DEG);
+      const rotX = round(-ny * TILT_DEG * 0.8);
+      const s = round(Math.max(MIN_SCALE, 1 - d2 * SHRINK));
+      c.style.transform = `perspective(${PERSPECTIVE}px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${s})`;
+    }
+  };
+
+  // ---- Wires: measured from the real (curved) port positions on screen ----
+  const markPorts = (): void => {
+    plane.querySelectorAll('.is-linked').forEach((el) => el.classList.remove('is-linked'));
+    for (const link of links) {
+      document.getElementById(link.from)?.querySelector(`[data-port="${link.fromSide}"]`)?.classList.add('is-linked');
+      document.getElementById(link.to)?.querySelector(`[data-port="${link.toSide}"]`)?.classList.add('is-linked');
+    }
+  };
+
+  const paths = links.map((link) => {
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('class', 'wire');
+    path.dataset.from = link.from;
+    path.dataset.to = link.to;
+    svg.append(path);
+    return path;
+  });
+
+  const drawWires = (): void => {
+    const w = wall.getBoundingClientRect();
+    const portCenter = (id: string, side: Side): Point | null => {
+      const port = document.getElementById(id)?.querySelector(`[data-port="${side}"]`);
+      if (!port) return null;
+      const r = port.getBoundingClientRect();
+      return { x: round(r.left + r.width / 2 - w.left), y: round(r.top + r.height / 2 - w.top) };
+    };
+    links.forEach((link, i) => {
+      const a = portCenter(link.from, link.fromSide);
+      const b = portCenter(link.to, link.toSide);
+      if (a && b) paths[i]?.setAttribute('d', route(a, link.fromSide, b, link.toSide));
+    });
+  };
+
+  /** Applies the camera: plane position, card curvature, then wires. */
   const render = (): void => {
     plane.style.transform = `translate3d(${cam.x}px, ${cam.y}px, 0) scale(${cam.scale})`;
+    curve();
+    drawWires();
   };
-
-  /** Card box in plane coordinates (independent of the camera). */
-  const boxOf = (el: Element): Box => {
-    const r = el.getBoundingClientRect();
-    const p = plane.getBoundingClientRect();
-    return {
-      x: (r.left - p.left) / cam.scale,
-      y: (r.top - p.top) / cam.scale,
-      w: r.width / cam.scale,
-      h: r.height / cam.scale,
-    };
-  };
-
-  const cards = (): HTMLElement[] => [...plane.querySelectorAll<HTMLElement>('[data-node]')];
 
   /** Camera translation that puts a plane point at the center of the screen. */
   const centerOn = (p: Point): Point => ({
@@ -135,12 +198,12 @@ export function initWall(): void {
 
   /** The screen center may travel anywhere over the cards, plus a margin. */
   const computeBounds = (): void => {
-    const boxes = cards().map(boxOf);
-    if (boxes.length === 0) return;
-    const minX = Math.min(...boxes.map((b) => b.x)) - EDGE_PADDING;
-    const minY = Math.min(...boxes.map((b) => b.y)) - EDGE_PADDING;
-    const maxX = Math.max(...boxes.map((b) => b.x + b.w)) + EDGE_PADDING;
-    const maxY = Math.max(...boxes.map((b) => b.y + b.h)) + EDGE_PADDING;
+    const all = cards.map(boxOf);
+    if (all.length === 0) return;
+    const minX = Math.min(...all.map((b) => b.x)) - EDGE_PADDING;
+    const minY = Math.min(...all.map((b) => b.y)) - EDGE_PADDING;
+    const maxX = Math.max(...all.map((b) => b.x + b.w)) + EDGE_PADDING;
+    const maxY = Math.max(...all.map((b) => b.y + b.h)) + EDGE_PADDING;
     const halfW = wall.clientWidth / 2;
     const halfH = wall.clientHeight / 2;
     bounds = {
@@ -208,56 +271,22 @@ export function initWall(): void {
     target = null;
   };
 
-  /** Moves the camera to a card (instantly under reduced motion). */
-  const goTo = (el: Element): void => {
+  /** Point of a card the camera centers on (its top part if taller than the screen). */
+  const focusPoint = (el: HTMLElement): Point => {
     const b = boxOf(el);
-    const dest = centerOn({ x: b.x + b.w / 2, y: b.y + Math.min(b.h, wall.clientHeight) / 2 });
+    return { x: b.x + b.w / 2, y: b.y + Math.min(b.h, wall.clientHeight) / 2 };
+  };
+
+  /** Moves the camera to a card (instantly under reduced motion). */
+  const goTo = (el: HTMLElement): void => {
+    const dest = centerOn(focusPoint(el));
     stopMotion();
     if (reducedMotion.matches) {
-      cam.x = dest.x;
-      cam.y = dest.y;
+      Object.assign(cam, dest);
       render();
     } else {
       target = dest;
       startLoop();
-    }
-  };
-
-  // ---- Wires ----
-  const drawWires = (): void => {
-    svg.replaceChildren();
-    plane.querySelectorAll('.is-linked').forEach((el) => el.classList.remove('is-linked'));
-
-    for (const link of links) {
-      const fromEl = document.getElementById(link.from);
-      const toEl = document.getElementById(link.to);
-      if (!fromEl || !toEl) continue;
-
-      const a = portPoint(boxOf(fromEl), link.fromSide);
-      const b = portPoint(boxOf(toEl), link.toSide);
-
-      const path = document.createElementNS(SVG_NS, 'path');
-      path.setAttribute('d', route(a, link.fromSide, b, link.toSide));
-      path.setAttribute('class', 'wire');
-      path.dataset.from = link.from;
-      path.dataset.to = link.to;
-      svg.append(path);
-
-      // Bus tap: a small junction where a branch leaves a horizontal line
-      const fromHorizontal = link.fromSide === 'e' || link.fromSide === 'w';
-      const toVertical = link.toSide === 'n' || link.toSide === 's';
-      if (fromHorizontal && toVertical) {
-        const tap = document.createElementNS(SVG_NS, 'rect');
-        tap.setAttribute('x', String(b.x - 4));
-        tap.setAttribute('y', String(a.y - 4));
-        tap.setAttribute('width', '8');
-        tap.setAttribute('height', '8');
-        tap.setAttribute('class', 'tap');
-        svg.append(tap);
-      }
-
-      fromEl.querySelector(`[data-port="${link.fromSide}"]`)?.classList.add('is-linked');
-      toEl.querySelector(`[data-port="${link.toSide}"]`)?.classList.add('is-linked');
     }
   };
 
@@ -347,7 +376,7 @@ export function initWall(): void {
   // ---- Keyboard: bring the focused card into view ----
   wall.addEventListener('focusin', (e) => {
     if (dragging || !(e.target instanceof Element)) return;
-    const card = e.target.closest('[data-node]');
+    const card = e.target.closest<HTMLElement>('[data-node]');
     if (card) goTo(card);
   });
   // The browser may scroll the overflow:hidden wall itself on focus: undo it
@@ -360,7 +389,8 @@ export function initWall(): void {
   const layout = (): void => {
     wall.classList.add('is-wall');
     cam.scale = 1;
-    drawWires();
+    measure();
+    markPorts();
     computeBounds();
   };
 
@@ -370,9 +400,7 @@ export function initWall(): void {
   const startCard = hashTarget?.matches('[data-node]') ? hashTarget : document.getElementById('node-leo');
 
   const centerOnStart = (): void => {
-    if (!startCard) return;
-    const b = boxOf(startCard);
-    Object.assign(cam, centerOn({ x: b.x + b.w / 2, y: b.y + Math.min(b.h, wall.clientHeight) / 2 }));
+    if (startCard) Object.assign(cam, centerOn(focusPoint(startCard)));
     render();
   };
 
@@ -381,13 +409,16 @@ export function initWall(): void {
   // The hash also makes the browser scroll the page toward the card: undo it
   if (hashTarget) requestAnimationFrame(() => window.scrollTo(0, 0));
 
-  // Size changes (window resize, fonts loaded) move ports: redraw and re-bound
+  // Size changes (window resize, fonts loaded) move ports: measure again
   new ResizeObserver(() => {
     layout();
+    render();
     startLoop(); // springs back inside if the new bounds require it
   }).observe(wall);
   void document.fonts.ready.then(() => {
     layout();
-    if (!userMoved) centerOnStart();
+    if (userMoved) render();
+    else centerOnStart();
   });
+  reducedMotion.addEventListener('change', render);
 }

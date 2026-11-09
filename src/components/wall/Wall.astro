@@ -41,8 +41,9 @@ const place = (id: string): string | undefined => {
 ---
 
 <div class="wall" data-wall data-links={JSON.stringify(layout.links)}>
+<!-- Wires are drawn in screen space, under the cards (see src/scripts/wall.ts) -->
+<svg class="wires" data-wires aria-hidden="true"></svg>
 <div class="plane" data-plane>
-  <svg class="wires" data-wires aria-hidden="true"></svg>
   <!-- Léo: the root node -->
   <WallCard id="node-leo" style={place('node-leo')} kind="root" node={0} label={t('card.root')} meta="Paris, FR">
     <BlueprintPlaceholder slot="visual" seed="leo-salvayre" label="portrait" />
@@ -207,30 +208,21 @@ const place = (id: string): string | undefined => {
     }
   }
 
-  /* Wires live in plane coordinates; strokes keep their screen width when zoomed */
+  /* Wires: a screen-sized layer under the cards, redrawn from the real port positions */
   .is-wall .wires {
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
     display: block;
-    width: 1px;
-    max-width: none; /* the global svg reset would shrink it to the 0px plane */
-    height: 1px;
-    overflow: visible;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    pointer-events: none;
   }
 
   .wires :global(.wire) {
     fill: none;
     stroke: var(--c-text-muted);
     stroke-width: 1.5;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .wires :global(.tap) {
-    fill: var(--c-bg);
-    stroke: var(--c-text-muted);
-    stroke-width: 1.5;
-    vector-effect: non-scaling-stroke;
   }
 
   /* In wall mode only the ports that carry a wire are shown, and they light up */

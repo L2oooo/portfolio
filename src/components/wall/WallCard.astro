@@ -55,23 +55,64 @@ const hasVisual = Astro.slots.has('visual');
 </article>
 
 <style>
+  /*
+   * Glass tile. The wall script sets, per card:
+   *   --nx, --ny : position from the screen center (-1…1), drives the reflection
+   *   --ab       : 0…1, chromatic aberration, stronger away from the center
+   * They default to 0, so the list view stays flat and quiet.
+   */
   .card {
     --card-radius: 12px; /* a bit softer than the site: "glass tile" feel */
+    --nx: 0;
+    --ny: 0;
+    --ab: 0;
+    --rim: var(--glass-rim-hi);
     position: relative;
     display: flex;
     flex-direction: column;
     min-width: 0;
-    background: var(--c-surface);
-    border: var(--line) solid var(--c-line-strong);
+    border: var(--line) solid transparent;
     border-radius: var(--card-radius);
-    /* Inner top highlight: the first hint of the glass edge (refined at step 4) */
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
-    transition: border-color var(--dur-fast) var(--ease-out);
+    /* Two backgrounds: the surface inside, a light gradient on the border (the glass rim) */
+    background:
+      linear-gradient(var(--c-surface), var(--c-surface)) padding-box,
+      linear-gradient(
+          135deg,
+          var(--rim),
+          var(--glass-rim-lo) 35%,
+          var(--glass-rim-lo) 70%,
+          var(--glass-rim-hi)
+        )
+        border-box;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.06),
+      /* chromatic fringes, offset left/right like a lens edge */
+      calc(var(--ab) * -2.5px) 0 calc(var(--ab) * 2px) 0 var(--fringe-warm),
+      calc(var(--ab) * 2.5px) 0 calc(var(--ab) * 2px) 0 var(--fringe-cool);
+    transform-origin: 50% 50%;
+  }
+
+  /* Reflection: a soft diagonal band that slides as the card tilts */
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      115deg,
+      transparent 35%,
+      var(--glass-sheen) 48%,
+      transparent 62%
+    );
+    background-size: 250% 250%;
+    background-position: calc(50% + var(--nx) * 40%) calc(50% + var(--ny) * 40%);
   }
 
   .card:hover,
   .card:focus-within {
-    border-color: var(--c-text-muted);
+    --rim: var(--c-text);
   }
 
   /* ---- Ports: wire anchors on each edge ---- */
