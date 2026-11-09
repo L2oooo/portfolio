@@ -16,3 +16,9 @@ export function stripLocale(pathname: string): string {
 export function localizedPath(lang: Lang, pathname: string): string {
   return getRelativeLocaleUrl(lang, stripLocale(pathname));
 }
+
+/** URL of a project page: "/projets/alpha/" (fr) or "/en/projects/alpha/" (en). */
+export function projectPath(lang: Lang, slug: string): string {
+  const segment = lang === 'fr' ? 'projets' : 'projects';
+  return getRelativeLocaleUrl(lang, `${segment}/${slug}`);
+}

@@ -1,0 +1,137 @@
+---
+/*
+ * WallCard — the shell shared by every card of the wall.
+ * Renders the node header ("node: 03 · projet"), the four connection ports
+ * (where wires attach at step 2), an optional visual area (named slot
+ * "visual") and the card body (default slot).
+ * data-* attributes describe the node for the wall script and the lens.
+ */
+import type { Domain } from '../../data/domains';
+
+export type CardKind = 'root' | 'hub' | 'project' | 'section';
+
+interface Props {
+  id: string; // DOM id, also the node id used by wires ("node-alpha")
+  kind: CardKind;
+  node: number;
+  label: string; // header label, e.g. "projet" or "parcours"
+  meta?: string; // right side of the header, e.g. a year
+  domains?: Domain[];
+  class?: string;
+}
+
+const { id, kind, node, label, meta, domains = [], class: className } = Astro.props;
+const hasVisual = Astro.slots.has('visual');
+---
+
+<article
+  id={id}
+  class:list={['card', `card--${kind}`, className]}
+  data-node={id}
+  data-kind={kind}
+  data-domains={domains.join(' ') || undefined}
+>
+  <span class="port port--n" aria-hidden="true"></span>
+  <span class="port port--e" aria-hidden="true"></span>
+  <span class="port port--s" aria-hidden="true"></span>
+  <span class="port port--w" aria-hidden="true"></span>
+
+  <header class="card-head mono">
+    <span>node: {String(node).padStart(2, '0')} · {label}</span>
+    {meta && <span>{meta}</span>}
+  </header>
+
+  {hasVisual && (
+    <div class="card-visual">
+      <slot name="visual" />
+    </div>
+  )}
+
+  <div class="card-body">
+    <slot />
+  </div>
+</article>
+
+<style>
+  .card {
+    --card-radius: 12px; /* a bit softer than the site: "glass tile" feel */
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--c-surface);
+    border: var(--line) solid var(--c-line-strong);
+    border-radius: var(--card-radius);
+    /* Inner top highlight: the first hint of the glass edge (refined at step 4) */
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+    transition: border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .card:hover,
+  .card:focus-within {
+    border-color: var(--c-text-muted);
+  }
+
+  /* ---- Ports: wire anchors on each edge ---- */
+  .port {
+    position: absolute;
+    z-index: 1;
+    width: 9px;
+    height: 9px;
+    background: var(--c-bg);
+    border: 1.5px solid var(--c-text-muted);
+  }
+
+  .port--n {
+    top: -5px;
+    left: calc(50% - 4.5px);
+  }
+
+  .port--s {
+    bottom: -5px;
+    left: calc(50% - 4.5px);
+  }
+
+  .port--e {
+    right: -5px;
+    top: calc(50% - 4.5px);
+  }
+
+  .port--w {
+    left: -5px;
+    top: calc(50% - 4.5px);
+  }
+
+  /* ---- Header ---- */
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: var(--line) solid var(--c-line);
+  }
+
+  /* ---- Visual ---- */
+  .card-visual {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border-bottom: var(--line) solid var(--c-line);
+  }
+
+  .card-visual :global(img),
+  .card-visual :global(svg) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* ---- Body ---- */
+  .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    flex: 1;
+    padding: var(--space-4);
+  }
+</style>

@@ -5,6 +5,7 @@
  * the nodes computed by buildGraph(). Rendered at build time: zero JS needed
  * to display it. Interactions (hover/focus highlighting) come at step 5b.
  * Data attributes (data-domain, data-project) are already in place for them.
+ * `compact` draws only LÉO + the domains (used inside the Skills card).
  */
 import { MAP, type Graph, type Point } from '../data/graph';
 import { useTranslations, type Lang } from '../i18n/ui';
@@ -12,9 +13,13 @@ import { useTranslations, type Lang } from '../i18n/ui';
 interface Props {
   lang: Lang;
   graph: Graph;
+  compact?: boolean;
 }
 
-const { lang, graph } = Astro.props;
+const { lang, graph, compact = false } = Astro.props;
+const uid = compact ? 'map-compact' : 'map'; // unique ids if both variants share a page
+// Compact: crop the drawing to the inner ring and its labels
+const viewBox = compact ? '50 150 900 690' : '-130 30 1260 940';
 const t = useTranslations(lang);
 const pad = (n: number): string => String(n).padStart(2, '0');
 
@@ -24,6 +29,7 @@ const at = (angle: number, r: number): Point => ({
   x: Math.round((cx + r * Math.cos(rad(angle))) * 10) / 10,
   y: Math.round((cy + r * Math.sin(rad(angle))) * 10) / 10,
 });
+const axisReach = compact ? innerRadius + 110 : outerRadius + 60;
 
 // Label placement: to the right, left, above or below a node depending on its angle
 type Anchor = 'start' | 'middle' | 'end';
@@ -54,24 +60,24 @@ const bearings = [-90, 0, 90, 180]
 ---
 
 <svg
-  class="topology"
-  viewBox="-130 30 1260 940"
+  class:list={['topology', { 'is-compact': compact }]}
+  viewBox={viewBox}
   role="img"
-  aria-labelledby="map-title map-desc"
+  aria-labelledby={`${uid}-title ${uid}-desc`}
 >
-  <title id="map-title">{t('map.title')}</title>
-  <desc id="map-desc">{t('map.desc')}</desc>
+  <title id={`${uid}-title`}>{t('map.title')}</title>
+  <desc id={`${uid}-desc`}>{t(compact ? 'map.descCompact' : 'map.desc')}</desc>
 
   <!-- Blueprint scaffolding -->
   <g class="scaffold" aria-hidden="true">
-    <line x1={cx - outerRadius - 60} y1={cy} x2={cx + outerRadius + 60} y2={cy} />
-    <line x1={cx} y1={cy - outerRadius - 60} x2={cx} y2={cy + outerRadius + 60} />
+    <line x1={cx - axisReach} y1={cy} x2={cx + axisReach} y2={cy} />
+    <line x1={cx} y1={cy - axisReach} x2={cx} y2={cy + axisReach} />
     <circle cx={cx} cy={cy} r={innerRadius} class="orbit" />
-    <circle cx={cx} cy={cy} r={outerRadius} class="orbit outer" />
-    {ticks.map((tk) => (
+    {!compact && <circle cx={cx} cy={cy} r={outerRadius} class="orbit outer" />}
+    {!compact && ticks.map((tk) => (
       <line x1={tk.from.x} y1={tk.from.y} x2={tk.to.x} y2={tk.to.y} class:list={['tick', { major: tk.major }]} />
     ))}
-    {bearings.map((b) => (
+    {!compact && bearings.map((b) => (
       <text x={b.x} y={b.y} class="bearing" text-anchor="middle" dominant-baseline="middle">{b.label}</text>
     ))}
   </g>
@@ -248,11 +254,24 @@ const bearings = [-90, 0, 90, 180]
     fill: var(--c-accent);
   }
 
+  /* Compact (Skills card): fewer, bigger labels so they stay readable when small */
+  .is-compact .d-label {
+    font-size: 46px;
+  }
+
+  .is-compact .d-index {
+    display: none;
+  }
+
+  .is-compact .r-label {
+    font-size: 26px;
+  }
+
   /* ---- Small screens: numbers only, bigger type (the index below has the titles) ---- */
   @media (max-width: 699px) {
     /* The viewBox keeps side room for project titles, hidden here:
        zoom in and crop that empty room (the parent clips the overflow) */
-    .topology {
+    .topology:not(.is-compact) {
       width: 130%;
       max-width: none; /* overrides the global svg max-width reset */
       margin-left: -15%;
@@ -269,7 +288,7 @@ const bearings = [-90, 0, 90, 180]
       fill: var(--c-text);
     }
 
-    .d-label {
+    .topology:not(.is-compact) .d-label {
       font-size: 48px;
     }
 

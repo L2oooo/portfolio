@@ -1,0 +1,332 @@
+---
+/*
+ * Wall — every card of the home page, in logical reading order:
+ * Léo → Projects hub → each project → Background → Skills → Contact.
+ * This HTML is the "list view": complete and readable without JavaScript.
+ * Later steps enhance it into the draggable, curved, wired wall.
+ */
+import WallCard from './WallCard.astro';
+import BlueprintPlaceholder from './BlueprintPlaceholder.astro';
+import TopologyMap from '../TopologyMap.astro';
+import { useTranslations, type Lang } from '../../i18n/ui';
+import { projectPath } from '../../i18n/routes';
+import { getProjects, getExperiences } from '../../lib/content';
+import { buildGraph } from '../../data/graph';
+import { DOMAINS } from '../../data/domains';
+import { SKILLS, LANGUAGES } from '../../data/skills';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const pad = (n: number): string => String(n).padStart(2, '0');
+
+const projects = await getProjects(lang);
+const experiences = await getExperiences(lang);
+const domainGraph = buildGraph([]); // LÉO + domains only, for the Skills card
+
+// Node numbers follow reading order: 00 = Léo, 01 = hub, then projects…
+const firstSectionNode = 2 + projects.length;
+const projectCount = (d: (typeof DOMAINS)[number]): number =>
+  projects.filter((p) => p.data.domains.includes(d)).length;
+---
+
+<div class="wall" data-wall>
+  <!-- Léo: the root node -->
+  <WallCard id="node-leo" kind="root" node={0} label={t('card.root')} meta="Paris, FR">
+    <BlueprintPlaceholder slot="visual" seed="leo-salvayre" label="portrait" />
+    <h1 class="name">Léo<br />Salvayre<span class="dot" aria-hidden="true"></span></h1>
+    <p class="tagline">{t('hero.tagline')}</p>
+    <ul class="meta" role="list">
+      <li class="mono"><span class="status" aria-hidden="true"></span>{t('hero.status')}</li>
+      <li class="mono">{t('hero.loc')}</li>
+    </ul>
+  </WallCard>
+
+  <!-- Projects hub -->
+  <WallCard id="node-projects" kind="hub" node={1} label={t('card.hub')} meta={pad(projects.length)}>
+    <h2 class="section-title">{t('hub.title')}</h2>
+    <p class="muted">{t('hub.text')}</p>
+    <ul class="tally" role="list">
+      {DOMAINS.map((d) => (
+        <li class="mono">
+          <span>{t(`domain.${d}`)}</span>
+          <span>{pad(projectCount(d))}</span>
+        </li>
+      ))}
+    </ul>
+  </WallCard>
+
+  <!-- One card per project -->
+  {projects.map((p, i) => (
+    <WallCard
+      id={`node-${p.slug}`}
+      kind="project"
+      node={2 + i}
+      label={`${t('card.project')} ${pad(i + 1)}`}
+      meta={String(p.data.year)}
+      domains={p.data.domains}
+    >
+      <BlueprintPlaceholder slot="visual" seed={p.slug} />
+      <h3 class="project-title">
+        <a href={projectPath(lang, p.slug)} class="stretched">{p.data.title}</a>
+      </h3>
+      <p class="muted">{p.data.summary}</p>
+      <ul class="tags" role="list">
+        {p.data.domains.map((d) => <li class="mono">{t(`domain.${d}`)}</li>)}
+      </ul>
+    </WallCard>
+  ))}
+
+  <!-- Background as a traceroute -->
+  <WallCard id="node-background" kind="section" node={firstSectionNode} label={t('card.background')}>
+    <h2 class="section-title">{t('background.title')}</h2>
+    <ol class="trace" role="list">
+      {experiences.map((e, i) => (
+        <li>
+          <span class="mono hop">{t('background.hop')} {pad(i + 1)}</span>
+          <span class="mono years">
+            {e.data.start.slice(0, 4)}–{e.data.end?.slice(0, 4) ?? t('content.present')}
+          </span>
+          <span class="org">{e.data.org}</span>
+          <span class="role muted">{e.data.role}</span>
+        </li>
+      ))}
+    </ol>
+  </WallCard>
+
+  <!-- Skills, with the radial domain map -->
+  <WallCard id="node-skills" kind="section" node={firstSectionNode + 1} label={t('card.skills')}>
+    <h2 class="section-title">{t('skills.title')}</h2>
+    <div class="skills-map">
+      <TopologyMap lang={lang} graph={domainGraph} compact />
+    </div>
+    <dl class="skills">
+      {DOMAINS.map((d) => (
+        <div>
+          <dt class="mono">{t(`domain.${d}`)}</dt>
+          <dd>{SKILLS[d][lang].join(' · ')}</dd>
+        </div>
+      ))}
+      <div>
+        <dt class="mono">{t('skills.languages')}</dt>
+        <dd>{LANGUAGES[lang].join(' · ')}</dd>
+      </div>
+    </dl>
+  </WallCard>
+
+  <!-- Contact (placeholders until Léo provides details) -->
+  <WallCard id="node-contact" kind="section" node={firstSectionNode + 2} label={t('card.contact')}>
+    <h2 class="section-title">{t('contact.title')}</h2>
+    <p class="muted">{t('contact.text')}</p>
+    <ul class="channels" role="list">
+      {(['contact.email', 'contact.linkedin', 'contact.github'] as const).map((key) => (
+        <li class="mono">
+          <span>{t(key)}</span>
+          <span class="muted">{t('contact.soon')}</span>
+        </li>
+      ))}
+    </ul>
+  </WallCard>
+</div>
+
+<style>
+  /* ---- List view layout (the no-JS / "Liste" mode) ---- */
+  .wall {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    gap: var(--space-5);
+    padding-block: var(--space-6);
+  }
+
+  .wall > :global(.card--root) {
+    grid-column: 1 / -1;
+  }
+
+  /* Small screens: the name comes first, the visual goes below it */
+  .wall > :global(.card--root .card-visual) {
+    order: 1;
+    border-bottom: 0;
+    border-top: var(--line) solid var(--c-line);
+    /* follow the card's rounded corners (1px less for the border) */
+    border-radius: 0 0 calc(var(--card-radius) - 1px) calc(var(--card-radius) - 1px);
+  }
+
+  @media (min-width: 900px) {
+    .wall > :global(.card--root) {
+      display: grid;
+      grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+      grid-template-rows: auto 1fr;
+    }
+
+    .wall > :global(.card--root .card-head) {
+      grid-column: 1 / -1;
+    }
+
+    .wall > :global(.card--root .card-visual) {
+      grid-column: 2;
+      grid-row: 2;
+      aspect-ratio: auto;
+      border-top: 0;
+      border-left: var(--line) solid var(--c-line);
+      border-radius: 0 0 calc(var(--card-radius) - 1px) 0;
+    }
+
+    .wall > :global(.card--root .card-body) {
+      grid-column: 1;
+      grid-row: 2;
+      justify-content: flex-end;
+      padding: var(--space-6) var(--space-5);
+    }
+  }
+
+  /* ---- Typography inside cards ---- */
+  .name {
+    font-size: var(--fs-display);
+    font-weight: 800;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 0.14em;
+    height: 0.14em;
+    margin-left: 0.04em;
+    background: var(--c-accent);
+  }
+
+  .tagline {
+    max-width: 28ch;
+    font-size: var(--fs-lg);
+    line-height: 1.35;
+  }
+
+  .section-title {
+    font-size: var(--fs-xl);
+  }
+
+  .project-title {
+    font-size: var(--fs-xl);
+  }
+
+  .muted {
+    color: var(--c-text-muted);
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+    padding: 0;
+    list-style: none;
+  }
+
+  .status {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: var(--space-2);
+    border-radius: 50%;
+    background: var(--c-accent);
+    animation: pulse 2.4s var(--ease-out) infinite;
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.25;
+    }
+  }
+
+  /* Whole project card clickable, through its title link (accessible pattern) */
+  .stretched {
+    text-decoration: none;
+  }
+
+  .stretched::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border-radius: inherit;
+  }
+
+  .stretched:focus-visible {
+    outline: none;
+  }
+
+  .stretched:focus-visible::after {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 3px;
+  }
+
+  /* ---- Lists ---- */
+  .tags,
+  .tally,
+  .channels,
+  .trace {
+    padding: 0;
+    list-style: none;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: auto;
+  }
+
+  .tags li {
+    padding: 2px var(--space-2);
+    border: var(--line) solid var(--c-line-strong);
+    border-radius: var(--radius);
+  }
+
+  .tally li,
+  .channels li {
+    display: flex;
+    justify-content: space-between;
+    padding-block: var(--space-2);
+    border-bottom: var(--line) dashed var(--c-line);
+  }
+
+  .trace li {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    gap: 0 var(--space-3);
+    padding-block: var(--space-3);
+    border-bottom: var(--line) dashed var(--c-line);
+  }
+
+  .trace .hop {
+    grid-row: span 2;
+  }
+
+  .trace .years {
+    color: var(--c-text);
+  }
+
+  .trace .role {
+    grid-column: 2;
+    font-size: var(--fs-sm);
+  }
+
+  .org {
+    grid-column: 2;
+    font-weight: 600;
+  }
+
+  .skills-map {
+    max-width: 22rem;
+    margin-inline: auto;
+  }
+
+  .skills div {
+    padding-block: var(--space-2);
+    border-bottom: var(--line) dashed var(--c-line);
+  }
+
+  .skills dd {
+    font-size: var(--fs-sm);
+  }
+</style>

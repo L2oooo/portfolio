@@ -1,16 +1,14 @@
 ---
 /*
  * HomePage — the home page content, shared by "/" (fr) and "/en/" (en).
- * Hero = identity column + the topology map (fig.01).
- * Below: a TEMPORARY raw index of projects and background, replaced by the
- * real sections at step 7.
+ * Header + the card wall + the drawing's title block (footer).
+ * For now the wall renders as its list view; it becomes the draggable,
+ * wired wall in the next steps.
  */
 import Base from '../layouts/Base.astro';
 import Header from './Header.astro';
-import TopologyMap from './TopologyMap.astro';
+import Wall from './wall/Wall.astro';
 import { useTranslations, type Lang } from '../i18n/ui';
-import { getProjects, getExperiences } from '../lib/content';
-import { buildGraph } from '../data/graph';
 
 interface Props {
   lang: Lang;
@@ -18,74 +16,18 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
-
-const projects = await getProjects(lang);
-const experiences = await getExperiences(lang);
-const graph = buildGraph(
-  projects.map((p) => ({ slug: p.slug, title: p.data.title, year: p.data.year, domains: p.data.domains })),
-);
-const nodeCount = 1 + graph.domains.length + graph.projects.length;
-const pad = (n: number): string => String(n).padStart(2, '0');
 ---
 
 <Base title={t('meta.title')} description={t('meta.description')} lang={lang}>
   <Header lang={lang} annotation={t('map.fig')} />
 
   <main class="sheet">
-    <section class="hero" aria-labelledby="hero-title">
-      <div class="identity">
-        <p class="mono">node: 00 · root</p>
-        <h1 id="hero-title">Léo<br />Salvayre<span class="dot" aria-hidden="true"></span></h1>
-        <p class="tagline">{t('hero.tagline')}</p>
-        <ul class="meta" role="list">
-          <li class="mono"><span class="status" aria-hidden="true"></span>{t('hero.status')}</li>
-          <li class="mono">{t('hero.loc')}</li>
-          <li class="mono">{pad(nodeCount)} {t('hero.nodes')} · {pad(graph.links.length)} {t('hero.linksLabel')}</li>
-        </ul>
-      </div>
-
-      <figure class="map">
-        <TopologyMap lang={lang} graph={graph} />
-        <figcaption class="legend mono">
-          <span>{t('map.fig')}</span>
-          <span class="key"><i class="k-root" aria-hidden="true"></i>{t('map.legend.root')}</span>
-          <span class="key"><i class="k-domain" aria-hidden="true"></i>{t('map.legend.domain')}</span>
-          <span class="key"><i class="k-project" aria-hidden="true"></i>{t('map.legend.project')}</span>
-          <span class="key"><i class="k-link" aria-hidden="true"></i>{t('map.legend.link')}</span>
-        </figcaption>
-      </figure>
-    </section>
-
-    <!-- Temporary raw index (step 7 replaces it) -->
-    <section class="block" aria-labelledby="index-title">
-      <h2 id="index-title" class="mono">{t('content.projects')} · {projects.length}</h2>
-      <ol class="rows">
-        {projects.map((p, i) => (
-          <li>
-            <span class="mono">{pad(i + 1)}</span>
-            <span>{p.data.title}</span>
-            <span class="mono">{p.data.domains.map((d) => t(`domain.${d}`)).join(' · ')}</span>
-            <span class="mono">{p.data.year}</span>
-          </li>
-        ))}
-      </ol>
-      <h2 class="mono">{t('content.experiences')} · {experiences.length}</h2>
-      <ol class="rows">
-        {experiences.map((e) => (
-          <li>
-            <span class="mono">{e.data.start.slice(0, 4)}</span>
-            <span>{e.data.org}</span>
-            <span class="mono">{e.data.role}</span>
-            <span class="mono">{e.data.end?.slice(0, 4) ?? t('content.present')}</span>
-          </li>
-        ))}
-      </ol>
-    </section>
+    <Wall lang={lang} />
   </main>
 
   <footer class="titleblock">
     <span class="mono">{t('footer.drawnBy')}</span>
-    <span class="mono">rev: 0.2</span>
+    <span class="mono">rev: 0.3</span>
     <span class="mono">scale: 1:1</span>
   </footer>
 </Base>
@@ -97,169 +39,6 @@ const pad = (n: number): string => String(n).padStart(2, '0');
     padding-inline: var(--gutter);
   }
 
-  /* ---- Hero: identity + map ---- */
-  .hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-6);
-    align-items: center;
-    padding-block: var(--space-7);
-    border-bottom: var(--line) solid var(--c-line);
-  }
-
-  @media (min-width: 1100px) {
-    .hero {
-      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-      min-height: calc(100dvh - 61px); /* full first screen minus the header */
-    }
-  }
-
-  .identity h1 {
-    font-size: var(--fs-display);
-    font-weight: 800;
-    margin-block: var(--space-3) var(--space-4);
-  }
-
-  .dot {
-    display: inline-block;
-    width: 0.14em;
-    height: 0.14em;
-    margin-left: 0.04em;
-    background: var(--c-accent);
-  }
-
-  .tagline {
-    max-width: 26ch;
-    font-size: var(--fs-lg);
-    line-height: 1.35;
-    margin-bottom: var(--space-5);
-  }
-
-  .meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-5);
-    padding: 0;
-    list-style: none;
-  }
-
-  .status {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    margin-right: var(--space-2);
-    border-radius: 50%;
-    background: var(--c-accent);
-    animation: pulse 2.4s var(--ease-out) infinite;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.25;
-    }
-  }
-
-  /* ---- Map figure ---- */
-  .map {
-    margin: 0;
-    overflow-x: clip; /* the map zooms past its box on mobile: no horizontal scroll */
-  }
-
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-4);
-    margin-top: var(--space-4);
-    padding-top: var(--space-3);
-    border-top: var(--line) solid var(--c-line);
-  }
-
-  .legend > span:first-child {
-    color: var(--c-text);
-    margin-right: auto;
-  }
-
-  .key {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .key i {
-    display: inline-block;
-    border: 1.5px solid var(--c-text);
-  }
-
-  .k-root {
-    width: 10px;
-    height: 10px;
-    background: var(--c-text);
-  }
-
-  .k-domain {
-    width: 9px;
-    height: 9px;
-  }
-
-  .k-project {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-  }
-
-  .key i.k-link {
-    width: 18px;
-    height: 0;
-    border-width: 0;
-    border-top: 1.5px dashed var(--c-text-muted);
-  }
-
-  /* ---- Temporary index ---- */
-  .block {
-    padding-block: var(--space-7);
-  }
-
-  .block h2 {
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
-    font-weight: 400;
-    font-stretch: var(--stretch-body);
-    margin-bottom: var(--space-2);
-  }
-
-  .block h2:not(:first-child) {
-    margin-top: var(--space-6);
-  }
-
-  .rows {
-    padding: 0;
-    list-style: none;
-  }
-
-  .rows li {
-    display: grid;
-    grid-template-columns: 3rem minmax(0, 1fr) auto;
-    gap: var(--space-1) var(--space-3);
-    align-items: baseline;
-    padding-block: var(--space-3);
-    border-bottom: var(--line) solid var(--c-line);
-  }
-
-  .rows li > :nth-child(3) {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .rows li > :nth-child(4) {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  /* ---- Title block ---- */
   .titleblock {
     display: flex;
     align-items: center;
