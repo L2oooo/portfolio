@@ -1,0 +1,80 @@
+---
+/*
+ * ThemeToggle — switches between the "ink" (dark) and "paper" (light) themes.
+ * Writes the choice to <html data-theme> and remembers it in localStorage.
+ * Styled as a technical annotation rather than a generic sun/moon icon.
+ */
+---
+
+<button class="theme-toggle mono" type="button" data-theme-toggle>
+  <span class="label">theme:</span>
+  <span class="value" data-theme-value>ink</span>
+  <span class="swatch" aria-hidden="true"></span>
+</button>
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>('[data-theme-toggle]');
+  const valueEl = document.querySelector<HTMLSpanElement>('[data-theme-value]');
+  const root = document.documentElement;
+
+  type Theme = 'light' | 'dark';
+
+  const render = (theme: Theme): void => {
+    if (!button || !valueEl) return;
+    valueEl.textContent = theme === 'light' ? 'paper' : 'ink';
+    button.setAttribute(
+      'aria-label',
+      theme === 'light' ? 'Passer au thème sombre' : 'Passer au thème clair',
+    );
+  };
+
+  const current = (): Theme => (root.dataset.theme === 'light' ? 'light' : 'dark');
+
+  render(current());
+
+  button?.addEventListener('click', () => {
+    const next: Theme = current() === 'light' ? 'dark' : 'light';
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem('theme', next);
+    } catch {
+      /* storage blocked: the choice simply won't persist */
+    }
+    render(next);
+  });
+</script>
+
+<style>
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 44px; /* comfortable touch target */
+    padding-inline: var(--space-3);
+    border: var(--line) solid var(--c-line);
+    border-radius: var(--radius);
+    color: var(--c-text-muted);
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  .theme-toggle:hover {
+    border-color: var(--c-line-strong);
+    color: var(--c-text);
+  }
+
+  .value {
+    color: var(--c-text);
+    min-width: 5ch;
+    text-align: left;
+  }
+
+  /* Half-filled square: shows both themes at a glance */
+  .swatch {
+    width: 10px;
+    height: 10px;
+    border: var(--line) solid var(--c-text);
+    background: linear-gradient(135deg, var(--c-text) 50%, transparent 50%);
+  }
+</style>

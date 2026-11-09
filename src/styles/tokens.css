@@ -1,0 +1,79 @@
+/*
+ * Design tokens — the single source of truth for the visual language.
+ * Colors, typography, spacing and motion are exposed as CSS custom properties
+ * so every component speaks the same "blueprint" vocabulary.
+ * Dark ("ink") is the default; light ("paper") is applied via [data-theme="light"].
+ */
+
+:root {
+  /* ---- Color: ink theme (default) ---- */
+  --c-bg: #0e1013;          /* page background: ink */
+  --c-surface: #14171b;     /* raised panels, title blocks */
+  --c-line: #2a2f36;        /* thin structural lines */
+  --c-line-strong: #3d434c; /* emphasized lines, borders on hover */
+  --c-grid: rgb(232 230 225 / 0.035); /* blueprint grid, barely visible */
+  --c-grid-major: rgb(232 230 225 / 0.06);
+  --c-text: #e8e6e1;        /* primary text — 15.6:1 on bg */
+  --c-text-muted: #8a8f98;  /* annotations, secondary — 5.8:1 on bg */
+  --c-accent: #ff5b1f;      /* signal orange — 6.1:1 on bg */
+  --c-accent-ink: #0e1013;  /* text placed on top of the accent */
+
+  color-scheme: dark;
+
+  /* ---- Typography ---- */
+  --font-sans: 'Archivo Variable', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Mono', monospace;
+
+  /* Fluid type scale: min size on mobile, max on wide desktop */
+  --fs-xs: 0.75rem;                              /* 12px — annotations */
+  --fs-sm: 0.875rem;                             /* 14px */
+  --fs-base: 1rem;                               /* 16px — body */
+  --fs-lg: clamp(1.125rem, 1rem + 0.5vw, 1.375rem);
+  --fs-xl: clamp(1.5rem, 1.2rem + 1.2vw, 2.25rem);
+  --fs-display: clamp(3rem, 1.5rem + 7vw, 8.5rem); /* hero name */
+
+  /* Archivo width axis: condensed for display, normal for reading */
+  --stretch-display: 68%;
+  --stretch-body: 100%;
+
+  /* ---- Spacing: 8px base grid ---- */
+  --space-1: 0.25rem;  /* 4  */
+  --space-2: 0.5rem;   /* 8  */
+  --space-3: 1rem;     /* 16 */
+  --space-4: 1.5rem;   /* 24 */
+  --space-5: 2rem;     /* 32 */
+  --space-6: 3rem;     /* 48 */
+  --space-7: 4rem;     /* 64 */
+  --space-8: 6rem;     /* 96 */
+  --gutter: clamp(1rem, 0.5rem + 2.5vw, 3rem);
+  --max-width: 90rem;
+
+  /* Blueprint grid cell sizes */
+  --grid-minor: 24px;
+  --grid-major: 120px;
+
+  /* ---- Lines & shape ---- */
+  --line: 1px;
+  --radius: 2px; /* almost square: technical drawing, not soft UI */
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 150ms;
+  --dur-base: 300ms;
+}
+
+/* ---- Color: paper theme ---- */
+:root[data-theme='light'] {
+  --c-bg: #f2f0eb;
+  --c-surface: #eae7e0;
+  --c-line: #cfcbc2;
+  --c-line-strong: #a9a499;
+  --c-grid: rgb(17 19 22 / 0.045);
+  --c-grid-major: rgb(17 19 22 / 0.08);
+  --c-text: #111316;       /* 16.9:1 on bg */
+  --c-text-muted: #5c6068; /* 5.7:1 on bg */
+  --c-accent: #c2410c;     /* deeper orange — 4.5:1 on bg (AA) */
+  --c-accent-ink: #f2f0eb;
+
+  color-scheme: light;
+}
