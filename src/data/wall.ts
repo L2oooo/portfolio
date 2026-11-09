@@ -1,6 +1,8 @@
 /*
  * Wall layout — where each card sits on the wall's plane, and which ports
- * are wired together. Pure data, computed at build time.
+ * are wired together. Pure data, computed at build time, in two size sets:
+ * DESKTOP and MOBILE (same topology, narrower cards on phones so text stays
+ * full size).
  *
  * Plane coordinates are in px, origin (0, 0) = center of Léo's card.
  * `align` says which point of the card (x, y) refers to, so a card can be
@@ -36,24 +38,75 @@ export interface WallLayout {
   links: WallLink[];
 }
 
-const GAP = 120; // space between Léo and the cards around him
-const BUS_GAP = 64; // space between the bus line and the project cards
-const PROJECT_WIDTH = 360;
-const PROJECT_STEP = PROJECT_WIDTH + 64; // horizontal pitch of project columns
+/** Sizes of one layout variant. */
+export interface WallMetrics {
+  gap: number; // space between Léo and the cards around him
+  busGap: number; // space between the bus line and the project cards
+  leoWidth: number;
+  leoHalfHeight: number; // expected half height of Léo's card: keeps contact/skills clear of it
+  hubWidth: number;
+  projectWidth: number;
+  projectSpacing: number; // space between two project columns
+  contactWidth: number;
+  skillsWidth: number;
+  backgroundWidth: number;
+}
 
-const LEO_WIDTH = 760;
-const HUB_WIDTH = 320;
+export const DESKTOP: WallMetrics = {
+  gap: 120,
+  busGap: 64,
+  leoWidth: 760,
+  leoHalfHeight: 220,
+  hubWidth: 320,
+  projectWidth: 360,
+  projectSpacing: 64,
+  contactWidth: 380,
+  skillsWidth: 440,
+  backgroundWidth: 420,
+};
 
-export function buildWall(projectIds: string[]): WallLayout {
-  const half = LEO_WIDTH / 2;
-  const hubRight = half + GAP + HUB_WIDTH;
+export const MOBILE: WallMetrics = {
+  gap: 72,
+  busGap: 48,
+  leoWidth: 320,
+  leoHalfHeight: 330,
+  hubWidth: 280,
+  projectWidth: 300,
+  projectSpacing: 48,
+  contactWidth: 300,
+  skillsWidth: 320,
+  backgroundWidth: 320,
+};
+
+export function buildWall(projectIds: string[], m: WallMetrics): WallLayout {
+  const half = m.leoWidth / 2;
+  const hubRight = half + m.gap + m.hubWidth;
+  const projectStep = m.projectWidth + m.projectSpacing;
 
   const placements: Record<string, Placement> = {
-    'node-leo': { x: 0, y: 0, width: LEO_WIDTH, alignX: 'center', alignY: 'center' },
-    'node-contact': { x: 0, y: -(GAP + 220), width: 380, alignX: 'center', alignY: 'end' },
-    'node-skills': { x: 0, y: GAP + 220, width: 440, alignX: 'center', alignY: 'start' },
-    'node-background': { x: -(half + GAP), y: 0, width: 420, alignX: 'end', alignY: 'center' },
-    'node-projects': { x: half + GAP, y: 0, width: HUB_WIDTH, alignX: 'start', alignY: 'center' },
+    'node-leo': { x: 0, y: 0, width: m.leoWidth, alignX: 'center', alignY: 'center' },
+    'node-contact': {
+      x: 0,
+      y: -(m.gap + m.leoHalfHeight),
+      width: m.contactWidth,
+      alignX: 'center',
+      alignY: 'end',
+    },
+    'node-skills': {
+      x: 0,
+      y: m.gap + m.leoHalfHeight,
+      width: m.skillsWidth,
+      alignX: 'center',
+      alignY: 'start',
+    },
+    'node-background': {
+      x: -(half + m.gap),
+      y: 0,
+      width: m.backgroundWidth,
+      alignX: 'end',
+      alignY: 'center',
+    },
+    'node-projects': { x: half + m.gap, y: 0, width: m.hubWidth, alignX: 'start', alignY: 'center' },
   };
 
   // Projects alternate above / below the bus, filling columns left to right
@@ -61,9 +114,9 @@ export function buildWall(projectIds: string[]): WallLayout {
     const column = Math.floor(i / 2);
     const above = i % 2 === 0;
     placements[id] = {
-      x: hubRight + GAP + column * PROJECT_STEP,
-      y: above ? -BUS_GAP : BUS_GAP,
-      width: PROJECT_WIDTH,
+      x: hubRight + m.gap + column * projectStep,
+      y: above ? -m.busGap : m.busGap,
+      width: m.projectWidth,
       alignX: 'start',
       alignY: above ? 'end' : 'start',
     };
@@ -87,14 +140,24 @@ export function buildWall(projectIds: string[]): WallLayout {
   return { placements, links };
 }
 
-/** CSS custom properties that place a card on the plane (used in wall mode only). */
-export function placementStyle(p: Placement): string {
-  const shift = { start: '0%', center: '-50%', end: '-100%' } as const;
+const SHIFT = { start: '0%', center: '-50%', end: '-100%' } as const;
+
+/**
+ * CSS custom properties placing a card on the plane (wall mode only):
+ * --x/--y/--w/--tx/--ty for desktop, the same with an "m" suffix for phones.
+ * The stylesheet picks the right set with a media query.
+ */
+export function placementStyle(desktop: Placement, mobile: Placement): string {
   return [
-    `--x: ${p.x}px`,
-    `--y: ${p.y}px`,
-    `--w: ${p.width}px`,
-    `--tx: ${shift[p.alignX]}`,
-    `--ty: ${shift[p.alignY]}`,
+    `--x: ${desktop.x}px`,
+    `--y: ${desktop.y}px`,
+    `--w: ${desktop.width}px`,
+    `--tx: ${SHIFT[desktop.alignX]}`,
+    `--ty: ${SHIFT[desktop.alignY]}`,
+    `--xm: ${mobile.x}px`,
+    `--ym: ${mobile.y}px`,
+    `--wm: ${mobile.width}px`,
+    `--txm: ${SHIFT[mobile.alignX]}`,
+    `--tym: ${SHIFT[mobile.alignY]}`,
   ].join('; ');
 }

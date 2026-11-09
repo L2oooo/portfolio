@@ -15,7 +15,7 @@ import { getProjects, getExperiences } from '../../lib/content';
 import { buildGraph } from '../../data/graph';
 import { DOMAINS } from '../../data/domains';
 import { SKILLS, LANGUAGES } from '../../data/skills';
-import { buildWall, placementStyle } from '../../data/wall';
+import { buildWall, placementStyle, DESKTOP, MOBILE } from '../../data/wall';
 
 interface Props {
   lang: Lang;
@@ -31,10 +31,13 @@ const domainGraph = buildGraph([]); // LÉO + domains only, for the Skills card
 
 // Node numbers follow reading order: 00 = Léo, 01 = hub, then projects…
 const firstSectionNode = 2 + projects.length;
-const layout = buildWall(projects.map((p) => `node-${p.slug}`));
+const projectIds = projects.map((p) => `node-${p.slug}`);
+const layout = buildWall(projectIds, DESKTOP);
+const mobileLayout = buildWall(projectIds, MOBILE);
 const place = (id: string): string | undefined => {
-  const p = layout.placements[id];
-  return p ? placementStyle(p) : undefined;
+  const desktop = layout.placements[id];
+  const mobile = mobileLayout.placements[id];
+  return desktop && mobile ? placementStyle(desktop, mobile) : undefined;
 };
 
 const projectCount = (d: (typeof DOMAINS)[number]): number =>
@@ -174,6 +177,18 @@ const projectCount = (d: (typeof DOMAINS)[number]): number =>
     height: calc(100dvh - 61px); /* the first screen, minus the header */
     padding: 0;
     overflow: hidden;
+    cursor: grab;
+    touch-action: none; /* the wall handles touch gestures itself */
+    user-select: none; /* dragging over text must not select it */
+  }
+
+  .wall.is-dragging {
+    cursor: grabbing;
+  }
+
+  /* While dragging, links and buttons must not react to the pointer */
+  .wall.is-dragging .plane {
+    pointer-events: none;
   }
 
   .is-wall .plane {
@@ -184,14 +199,25 @@ const projectCount = (d: (typeof DOMAINS)[number]): number =>
     width: 0;
     height: 0;
     transform-origin: 0 0;
+    will-change: transform; /* keep the plane on its own GPU layer while it moves */
   }
 
+  /* Phone layout by default, desktop layout from 900px */
   .is-wall .plane > :global(.card) {
     position: absolute;
-    top: var(--y);
-    left: var(--x);
-    width: var(--w);
-    translate: var(--tx) var(--ty);
+    top: var(--ym);
+    left: var(--xm);
+    width: var(--wm);
+    translate: var(--txm) var(--tym);
+  }
+
+  @media (min-width: 900px) {
+    .is-wall .plane > :global(.card) {
+      top: var(--y);
+      left: var(--x);
+      width: var(--w);
+      translate: var(--tx) var(--ty);
+    }
   }
 
   /* Wires live in plane coordinates; strokes keep their screen width when zoomed */
@@ -230,7 +256,13 @@ const projectCount = (d: (typeof DOMAINS)[number]): number =>
   }
 
   .is-wall .name {
-    font-size: 5.5rem; /* fixed size: the whole wall is scaled as one drawing */
+    font-size: 3.25rem; /* fixed size: the wall is one drawing */
+  }
+
+  @media (min-width: 900px) {
+    .is-wall .name {
+      font-size: 5.5rem;
+    }
   }
 
   .plane > :global(.card--root) {
