@@ -7,6 +7,8 @@ import { defineConfig } from 'astro/config';
 
 // https://astro.build/config
 export default defineConfig({
+  // The dev toolbar sits at the bottom center, exactly over the wall's nav bar
+  devToolbar: { enabled: false },
   i18n: {
     locales: ['fr', 'en'],
     defaultLocale: 'fr',

@@ -7,7 +7,9 @@
  *      panning, and auto-centering of the card that receives keyboard focus,
  *   3. curves the wall: each card tilts and shrinks with its distance from the
  *      screen center (CSS 3D), and gets a glass reflection / lens fringe,
- *   4. draws orthogonal wires between the real on-screen port positions.
+ *   4. draws orthogonal wires between the real on-screen port positions,
+ *   5. drives the bottom bar: fly to a card, highlight the card in view, and
+ *      switch between the wall and the plain list (choice remembered).
  * Without JS the plain card list stays as is.
  * Exposes: initWall().
  */
@@ -46,6 +48,25 @@ const TILT_DEG = 14; // max rotation of a card one screen-half away from the cen
 const SHRINK = 0.07; // scale lost per unit of squared distance
 const MIN_SCALE = 0.78;
 const PERSPECTIVE = 1600; // px, lower = stronger 3D
+
+const VIEW_KEY = 'wall-view'; // localStorage key of the visitor's wall/list choice
+type View = 'wall' | 'list';
+
+function readView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'wall';
+  } catch {
+    return 'wall'; // storage blocked: default view
+  }
+}
+
+function saveView(view: View): void {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    /* storage blocked: the choice simply won't persist */
+  }
+}
 
 function isSide(value: unknown): value is Side {
   return value === 'n' || value === 'e' || value === 's' || value === 'w';
@@ -104,6 +125,12 @@ export function initWall(): void {
   let bounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 }; // allowed camera translations
   let frame = 0;
   let userMoved = false; // once the visitor moves the wall, never recenter on our own
+  let view: View = 'wall';
+
+  const bar = document.querySelector<HTMLElement>('[data-wall-bar]');
+  const barLinks = [...(bar?.querySelectorAll<HTMLAnchorElement>('a[data-target]') ?? [])];
+  const toggle = bar?.querySelector<HTMLButtonElement>('[data-view-toggle]');
+  const toggleLabel = toggle?.querySelector<HTMLElement>('[data-view-label]');
 
   // Flat card boxes in plane coordinates, measured once per layout (curvature ignored)
   const boxes = new Map<HTMLElement, Box>();
@@ -183,11 +210,35 @@ export function initWall(): void {
     });
   };
 
-  /** Applies the camera: plane position, card curvature, then wires. */
+  /** Highlights, in the bar, the card nearest to the screen center. */
+  let currentId = '';
+  const markCurrent = (): void => {
+    const halfW = wall.clientWidth / 2;
+    const halfH = wall.clientHeight / 2;
+    let best = '';
+    let bestDist = Infinity;
+    for (const c of cards) {
+      const b = boxOf(c);
+      const d = Math.hypot(cam.x + (b.x + b.w / 2) * cam.scale - halfW, cam.y + (b.y + b.h / 2) * cam.scale - halfH);
+      if (d < bestDist) {
+        bestDist = d;
+        best = c.id;
+      }
+    }
+    if (best === currentId) return;
+    currentId = best;
+    for (const link of barLinks) {
+      if (link.dataset.target === best) link.setAttribute('aria-current', 'true');
+      else link.removeAttribute('aria-current');
+    }
+  };
+
+  /** Applies the camera: plane position, card curvature, wires, bar highlight. */
   const render = (): void => {
     plane.style.transform = `translate3d(${cam.x}px, ${cam.y}px, 0) scale(${cam.scale})`;
     curve();
     drawWires();
+    markCurrent();
   };
 
   /** Camera translation that puts a plane point at the center of the screen. */
@@ -297,7 +348,7 @@ export function initWall(): void {
   let suppressClick = false;
 
   wall.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
+    if (view !== 'wall' || e.button !== 0) return;
     stopMotion();
     press = { id: e.pointerId, x: e.clientX, y: e.clientY, camX: cam.x, camY: cam.y };
     dragging = false;
@@ -361,7 +412,7 @@ export function initWall(): void {
   wall.addEventListener(
     'wheel',
     (e) => {
-      if (e.ctrlKey) return; // leave pinch-zoom to the browser
+      if (view !== 'wall' || e.ctrlKey) return; // list view scrolls normally; pinch-zoom stays native
       e.preventDefault();
       stopMotion();
       userMoved = true;
@@ -375,12 +426,13 @@ export function initWall(): void {
 
   // ---- Keyboard: bring the focused card into view ----
   wall.addEventListener('focusin', (e) => {
-    if (dragging || !(e.target instanceof Element)) return;
+    if (view !== 'wall' || dragging || !(e.target instanceof Element)) return;
     const card = e.target.closest<HTMLElement>('[data-node]');
     if (card) goTo(card);
   });
   // The browser may scroll the overflow:hidden wall itself on focus: undo it
   wall.addEventListener('scroll', () => {
+    if (view !== 'wall') return;
     wall.scrollTop = 0;
     wall.scrollLeft = 0;
   });
@@ -404,21 +456,106 @@ export function initWall(): void {
     render();
   };
 
-  layout();
-  centerOnStart();
-  // The hash also makes the browser scroll the page toward the card: undo it
-  if (hashTarget) requestAnimationFrame(() => window.scrollTo(0, 0));
+  // ---- Views: the curved wall, or the plain list (the no-JS layout) ----
+  const updateToggle = (): void => {
+    if (!toggle) return;
+    toggle.hidden = false;
+    toggle.setAttribute('aria-pressed', String(view === 'list'));
+    if (toggleLabel) {
+      toggleLabel.textContent = (view === 'list' ? toggle.dataset.labelWall : toggle.dataset.labelList) ?? '';
+    }
+  };
+
+  const enterList = (): void => {
+    view = 'list';
+    stopMotion();
+    cancelAnimationFrame(frame);
+    frame = 0;
+    wall.classList.remove('is-wall', 'is-dragging');
+    plane.style.transform = '';
+    for (const c of cards) {
+      c.style.transform = '';
+      ['--nx', '--ny', '--ab'].forEach((v) => c.style.removeProperty(v));
+    }
+    paths.forEach((p) => p.removeAttribute('d'));
+    barLinks.forEach((l) => l.removeAttribute('aria-current'));
+    currentId = '';
+    updateToggle();
+  };
+
+  const enterWall = (focusCard: HTMLElement | null): void => {
+    view = 'wall';
+    layout();
+    if (focusCard) Object.assign(cam, centerOn(focusPoint(focusCard)));
+    render();
+    window.scrollTo(0, 0);
+    updateToggle();
+  };
+
+  /** In the list view, the card taking the most room on screen (to resume there). */
+  const mostVisibleCard = (): HTMLElement | null => {
+    let best: HTMLElement | null = null;
+    let bestVisible = 0;
+    for (const c of cards) {
+      const r = c.getBoundingClientRect();
+      const visible = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+      if (visible > bestVisible) {
+        bestVisible = visible;
+        best = c;
+      }
+    }
+    return best;
+  };
+
+  toggle?.addEventListener('click', () => {
+    if (view === 'wall') {
+      enterList();
+      saveView('list');
+    } else {
+      enterWall(mostVisibleCard());
+      saveView('wall');
+    }
+  });
+
+  // Bar links: fly to the card on the wall (the list view keeps the native anchor scroll)
+  for (const link of barLinks) {
+    link.addEventListener('click', (e) => {
+      if (view !== 'wall') return;
+      const card = link.dataset.target ? document.getElementById(link.dataset.target) : null;
+      if (!card) return;
+      e.preventDefault();
+      userMoved = true;
+      goTo(card);
+      // Move keyboard / screen-reader focus to the card itself
+      card.setAttribute('tabindex', '-1');
+      card.focus({ preventScroll: true });
+    });
+  }
+
+  if (readView() === 'list') {
+    enterList();
+  } else {
+    layout();
+    centerOnStart();
+    updateToggle();
+    // The hash also makes the browser scroll the page toward the card: undo it
+    if (hashTarget) requestAnimationFrame(() => window.scrollTo(0, 0));
+  }
 
   // Size changes (window resize, fonts loaded) move ports: measure again
   new ResizeObserver(() => {
+    if (view !== 'wall') return;
     layout();
     render();
     startLoop(); // springs back inside if the new bounds require it
   }).observe(wall);
   void document.fonts.ready.then(() => {
+    if (view !== 'wall') return;
     layout();
     if (userMoved) render();
     else centerOnStart();
   });
-  reducedMotion.addEventListener('change', render);
+  reducedMotion.addEventListener('change', () => {
+    if (view === 'wall') render();
+  });
 }

@@ -11,6 +11,7 @@
 import WallCard from './WallCard.astro';
 import BlueprintPlaceholder from './BlueprintPlaceholder.astro';
 import TopologyMap from '../TopologyMap.astro';
+import BottomBar from './BottomBar.astro';
 import { useTranslations, type Lang } from '../../i18n/ui';
 import { projectsPath } from '../../i18n/routes';
 import { getProjects, getExperiences } from '../../lib/content';
@@ -135,6 +136,8 @@ const place = (id: string): string | undefined => {
 </div>
 </div>
 
+<BottomBar lang={lang} />
+
 <script>
   import { initWall } from '../../scripts/wall';
   initWall();
@@ -156,6 +159,11 @@ const place = (id: string): string | undefined => {
 
   .wires {
     display: none;
+  }
+
+  /* List view: leave room so the floating bar never covers the last lines */
+  :global(body:has(.wall:not(.is-wall))) {
+    padding-bottom: 72px;
   }
 
   /* ---- Wall mode (class added by src/scripts/wall.ts) ---- */
