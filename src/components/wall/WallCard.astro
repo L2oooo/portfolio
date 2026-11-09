@@ -18,9 +18,10 @@ interface Props {
   meta?: string; // right side of the header, e.g. a year
   domains?: Domain[];
   class?: string;
+  style?: string; // placement on the wall plane (CSS custom properties)
 }
 
-const { id, kind, node, label, meta, domains = [], class: className } = Astro.props;
+const { id, kind, node, label, meta, domains = [], class: className, style } = Astro.props;
 const hasVisual = Astro.slots.has('visual');
 ---
 
@@ -30,11 +31,12 @@ const hasVisual = Astro.slots.has('visual');
   data-node={id}
   data-kind={kind}
   data-domains={domains.join(' ') || undefined}
+  style={style}
 >
-  <span class="port port--n" aria-hidden="true"></span>
-  <span class="port port--e" aria-hidden="true"></span>
-  <span class="port port--s" aria-hidden="true"></span>
-  <span class="port port--w" aria-hidden="true"></span>
+  <span class="port port--n" data-port="n" aria-hidden="true"></span>
+  <span class="port port--e" data-port="e" aria-hidden="true"></span>
+  <span class="port port--s" data-port="s" aria-hidden="true"></span>
+  <span class="port port--w" data-port="w" aria-hidden="true"></span>
 
   <header class="card-head mono">
     <span>node: {String(node).padStart(2, '0')} · {label}</span>

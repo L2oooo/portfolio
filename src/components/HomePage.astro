@@ -21,7 +21,7 @@ const t = useTranslations(lang);
 <Base title={t('meta.title')} description={t('meta.description')} lang={lang}>
   <Header lang={lang} annotation={t('map.fig')} />
 
-  <main class="sheet">
+  <main>
     <Wall lang={lang} />
   </main>
 
@@ -33,12 +33,6 @@ const t = useTranslations(lang);
 </Base>
 
 <style>
-  .sheet {
-    max-width: var(--max-width);
-    margin-inline: auto;
-    padding-inline: var(--gutter);
-  }
-
   .titleblock {
     display: flex;
     align-items: center;
