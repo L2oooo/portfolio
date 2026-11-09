@@ -1,0 +1,61 @@
+---
+/*
+ * Header — top bar shared by every page: home link (name), a contextual
+ * annotation slot (e.g. "fig.00"), the FR/EN switch and the theme toggle.
+ */
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { useTranslations, type Lang } from '../i18n/ui';
+import LangSwitch from './LangSwitch.astro';
+import ThemeToggle from './ThemeToggle.astro';
+
+interface Props {
+  lang: Lang;
+  annotation?: string;
+}
+
+const { lang, annotation } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<header class="topbar">
+  <a class="home mono" href={getRelativeLocaleUrl(lang, '')} aria-label={t('nav.home')}>
+    LS / portfolio
+  </a>
+  {annotation && <span class="mono hide-sm">{annotation}</span>}
+  <div class="actions">
+    <LangSwitch lang={lang} label={t('nav.lang')} />
+    <ThemeToggle lang={lang} />
+  </div>
+</header>
+
+<style>
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--gutter);
+    border-bottom: var(--line) solid var(--c-line);
+  }
+
+  .home {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    white-space: nowrap;
+    text-decoration: none;
+    color: var(--c-text);
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  @media (max-width: 599px) {
+    .hide-sm {
+      display: none;
+    }
+  }
+</style>

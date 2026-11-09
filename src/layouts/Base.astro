@@ -1,20 +1,31 @@
 ---
 /*
  * Base layout — wraps every page.
- * Provides the <head> (meta, fonts, global styles), sets the document language,
- * and applies the saved / system color theme before first paint to avoid a flash.
+ * Provides the <head> (meta, fonts, global styles, hreflang alternates),
+ * sets the document language, and applies the saved / system color theme
+ * before first paint to avoid a flash.
  */
 import '@fontsource-variable/archivo/wdth.css';
 import '@fontsource-variable/jetbrains-mono/wght.css';
 import '../styles/global.css';
+import { languages, defaultLang, type Lang } from '../i18n/ui';
+import { localizedPath } from '../i18n/routes';
 
 interface Props {
   title: string;
   description?: string;
-  lang?: 'fr' | 'en';
+  lang: Lang;
 }
 
-const { title, description = '', lang = 'fr' } = Astro.props;
+const { title, description = '', lang } = Astro.props;
+
+// Absolute URLs for each language version of this page (needed by hreflang)
+const base = Astro.site ?? Astro.url;
+const alternates = (Object.keys(languages) as Lang[]).map((code) => ({
+  code,
+  href: new URL(localizedPath(code, Astro.url.pathname), base).href,
+}));
+const defaultHref = alternates.find((a) => a.code === defaultLang)?.href;
 ---
 
 <!doctype html>
@@ -26,6 +37,8 @@ const { title, description = '', lang = 'fr' } = Astro.props;
     {description && <meta name="description" content={description} />}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="theme-color" content="#0e1013" />
+    {alternates.map((a) => <link rel="alternate" hreflang={a.code} href={a.href} />)}
+    {defaultHref && <link rel="alternate" hreflang="x-default" href={defaultHref} />}
 
     <!-- Runs before paint: saved choice wins, otherwise follow the OS setting -->
     <script is:inline>

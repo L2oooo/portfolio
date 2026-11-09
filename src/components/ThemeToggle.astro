@@ -2,13 +2,29 @@
 /*
  * ThemeToggle — switches between the "ink" (dark) and "paper" (light) themes.
  * Writes the choice to <html data-theme> and remembers it in localStorage.
- * Styled as a technical annotation rather than a generic sun/moon icon.
+ * Translated strings are passed through data-* attributes because the
+ * client-side script has no access to the server-side dictionary.
  */
+import { useTranslations, type Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+
+const t = useTranslations(Astro.props.lang);
 ---
 
-<button class="theme-toggle mono" type="button" data-theme-toggle>
-  <span class="label">theme:</span>
-  <span class="value" data-theme-value>ink</span>
+<button
+  class="theme-toggle mono"
+  type="button"
+  data-theme-toggle
+  data-ink={t('theme.ink')}
+  data-paper={t('theme.paper')}
+  data-to-dark={t('theme.toDark')}
+  data-to-light={t('theme.toLight')}
+>
+  <span class="label">{t('theme.label')}:</span>
+  <span class="value" data-theme-value>{t('theme.ink')}</span>
   <span class="swatch" aria-hidden="true"></span>
 </button>
 
@@ -21,11 +37,9 @@
 
   const render = (theme: Theme): void => {
     if (!button || !valueEl) return;
-    valueEl.textContent = theme === 'light' ? 'paper' : 'ink';
-    button.setAttribute(
-      'aria-label',
-      theme === 'light' ? 'Passer au thème sombre' : 'Passer au thème clair',
-    );
+    const { ink = '', paper = '', toDark = '', toLight = '' } = button.dataset;
+    valueEl.textContent = theme === 'light' ? paper : ink;
+    button.setAttribute('aria-label', theme === 'light' ? toDark : toLight);
   };
 
   const current = (): Theme => (root.dataset.theme === 'light' ? 'light' : 'dark');
@@ -66,8 +80,15 @@
 
   .value {
     color: var(--c-text);
-    min-width: 5ch;
+    min-width: 6ch;
     text-align: left;
+  }
+
+  /* Small screens: keep only the value, the header has little room */
+  @media (max-width: 599px) {
+    .label {
+      display: none;
+    }
   }
 
   /* Half-filled square: shows both themes at a glance */
