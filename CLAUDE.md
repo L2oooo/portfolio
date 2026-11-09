@@ -1,6 +1,8 @@
 # Portfolio — Léo Salvayre
 
-Bilingual (FR/EN) personal portfolio. Art direction **« Topologie »**: the site is a network map / blueprint where "LÉO" is the central node, linked to domain nodes (IA, Cyber, Dev, Business) and then to projects and experiences.
+Bilingual (FR/EN) personal portfolio. Art direction **« Topologie »**: the site is a network map / blueprint where "LÉO" is the central node, linked to domain nodes and then to projects and experiences.
+
+**Domains** (single list in `src/data/domains.ts`, shared by content schema, map and lens): `ai`, `cyber`, `dev`, `consulting`, `product`. Never hardcode this list elsewhere.
 
 @AGENTS.md
 
@@ -26,7 +28,9 @@ Bilingual (FR/EN) personal portfolio. Art direction **« Topologie »**: the sit
 - Every file starts with a comment explaining its role.
 - No `any` in TypeScript.
 - i18n: FR is the default locale at `/`, EN lives at `/en/`. UI strings go in `src/i18n/ui.ts`, never hardcoded in components.
-- Content (projects, experiences) lives in content collections under `src/content/`, one file per locale.
+- Content (projects, experiences) lives in content collections under `src/content/{projects,experiences}/{fr,en}/`, same filename in both locales. Read it through `src/lib/content.ts` (`getProjects`, `getExperiences`), never `getCollection` directly.
+- Placeholder projects (Alpha…Foxtrot) have `placeholder: true`; they must all be replaced before launch.
+- After creating or changing `src/content.config.ts`, restart the dev server (`astro dev stop` then `astro dev --background`): a running server does not pick up new collections.
 - One commit per logical step, English commit messages, no Co-Authored-By / Claude signature.
 
 ## Personal data

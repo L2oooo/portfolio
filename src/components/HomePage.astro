@@ -8,6 +8,7 @@
 import Base from '../layouts/Base.astro';
 import Header from './Header.astro';
 import { useTranslations, type Lang } from '../i18n/ui';
+import { getProjects, getExperiences } from '../lib/content';
 
 interface Props {
   lang: Lang;
@@ -15,6 +16,10 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
+
+const projects = await getProjects(lang);
+const experiences = await getExperiences(lang);
+const pad = (n: number): string => String(n).padStart(2, '0');
 
 const swatches = [
   { name: 'bg', token: '--c-bg' },
@@ -99,6 +104,38 @@ const scale = [
         <text x="540" y="22" class="label active" text-anchor="middle">CYBER</text>
         <text x="540" y="172" class="label" text-anchor="middle">DEV</text>
       </svg>
+    </section>
+
+    <!-- Temporary raw view of the content collections (step 4) -->
+    <section class="block" aria-labelledby="content-title">
+      <header class="block-head">
+        <span class="mono">04</span>
+        <h2 id="content-title">{t('specimen.content')}</h2>
+      </header>
+      <div class="content-preview">
+        <h3 class="mono">{t('content.projects')} · {projects.length}</h3>
+        <ol class="rows">
+          {projects.map((p, i) => (
+            <li>
+              <span class="mono">{pad(i + 1)}</span>
+              <span>{p.data.title}</span>
+              <span class="mono">{p.data.domains.map((d) => t(`domain.${d}`)).join(' · ')}</span>
+              <span class="mono">{p.data.year}</span>
+            </li>
+          ))}
+        </ol>
+        <h3 class="mono">{t('content.experiences')} · {experiences.length}</h3>
+        <ol class="rows">
+          {experiences.map((e) => (
+            <li>
+              <span class="mono">{e.data.start.slice(0, 4)}</span>
+              <span>{e.data.org}</span>
+              <span class="mono">{e.data.role}</span>
+              <span class="mono">{e.data.end?.slice(0, 4) ?? t('content.present')}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
     </section>
   </main>
 
@@ -293,5 +330,40 @@ const scale = [
 
   .label.active {
     fill: var(--c-accent);
+  }
+
+  /* ---- Content preview ---- */
+  .content-preview h3 {
+    font-stretch: var(--stretch-body);
+    font-weight: 400;
+    margin-bottom: var(--space-2);
+  }
+
+  .content-preview h3:not(:first-child) {
+    margin-top: var(--space-6);
+  }
+
+  .rows {
+    padding: 0;
+    list-style: none;
+  }
+
+  .rows li {
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr) auto;
+    gap: var(--space-1) var(--space-3);
+    align-items: baseline;
+    padding-block: var(--space-3);
+    border-bottom: var(--line) solid var(--c-line);
+  }
+
+  .rows li > :nth-child(3) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .rows li > :nth-child(4) {
+    grid-column: 3;
+    grid-row: 1;
   }
 </style>
