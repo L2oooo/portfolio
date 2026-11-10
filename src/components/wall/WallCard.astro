@@ -1,43 +1,34 @@
 ---
 /*
- * WallCard — the shell shared by every card of the wall.
- * Renders the node header ("node: 03 · projet"), the four connection ports
- * (where wires attach at step 2), an optional visual area (named slot
- * "visual") and the card body (default slot).
- * data-* attributes describe the node for the wall script and the lens.
+ * WallCard — a detailed card with a node header ("node: 03 · projet"), an
+ * optional visual area (named slot "visual") and a body (default slot).
+ * Used for the project cards of the projects page. Uses the shared ".glass"
+ * style (src/styles/global.css).
  */
 import type { Domain } from '../../data/domains';
 
-export type CardKind = 'root' | 'hub' | 'project' | 'section';
+export type CardKind = 'project';
 
 interface Props {
-  id: string; // DOM id, also the node id used by wires ("node-alpha")
+  id: string;
   kind: CardKind;
   node: number;
-  label: string; // header label, e.g. "projet" or "parcours"
+  label: string; // header label, e.g. "projet"
   meta?: string; // right side of the header, e.g. a year
   domains?: Domain[];
   class?: string;
-  style?: string; // placement on the wall plane (CSS custom properties)
 }
 
-const { id, kind, node, label, meta, domains = [], class: className, style } = Astro.props;
+const { id, kind, node, label, meta, domains = [], class: className } = Astro.props;
 const hasVisual = Astro.slots.has('visual');
 ---
 
 <article
   id={id}
-  class:list={['card', `card--${kind}`, className]}
-  data-node={id}
+  class:list={['card', 'glass', `card--${kind}`, className]}
   data-kind={kind}
   data-domains={domains.join(' ') || undefined}
-  style={style}
 >
-  <span class="port port--n" data-port="n" aria-hidden="true"></span>
-  <span class="port port--e" data-port="e" aria-hidden="true"></span>
-  <span class="port port--s" data-port="s" aria-hidden="true"></span>
-  <span class="port port--w" data-port="w" aria-hidden="true"></span>
-
   <header class="card-head mono">
     <span>node: {String(node).padStart(2, '0')} · {label}</span>
     {meta && <span>{meta}</span>}
@@ -55,97 +46,12 @@ const hasVisual = Astro.slots.has('visual');
 </article>
 
 <style>
-  /*
-   * Glass tile. The wall script sets, per card:
-   *   --nx, --ny : position from the screen center (-1…1), drives the reflection
-   *   --ab       : 0…1, chromatic aberration, stronger away from the center
-   * They default to 0, so the list view stays flat and quiet.
-   */
   .card {
-    --card-radius: 12px; /* a bit softer than the site: "glass tile" feel */
-    --nx: 0;
-    --ny: 0;
-    --ab: 0;
-    --rim: var(--glass-rim-hi);
-    position: relative;
     display: flex;
     flex-direction: column;
     min-width: 0;
-    border: var(--line) solid transparent;
-    border-radius: var(--card-radius);
-    /* Two backgrounds: the surface inside, a light gradient on the border (the glass rim) */
-    background:
-      linear-gradient(var(--c-surface), var(--c-surface)) padding-box,
-      linear-gradient(
-          135deg,
-          var(--rim),
-          var(--glass-rim-lo) 35%,
-          var(--glass-rim-lo) 70%,
-          var(--glass-rim-hi)
-        )
-        border-box;
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.06),
-      /* chromatic fringes, offset left/right like a lens edge */
-      calc(var(--ab) * -2.5px) 0 calc(var(--ab) * 2px) 0 var(--fringe-warm),
-      calc(var(--ab) * 2.5px) 0 calc(var(--ab) * 2px) 0 var(--fringe-cool);
-    transform-origin: 50% 50%;
   }
 
-  /* Reflection: a soft diagonal band that slides as the card tilts */
-  .card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    border-radius: inherit;
-    pointer-events: none;
-    background: linear-gradient(
-      115deg,
-      transparent 35%,
-      var(--glass-sheen) 48%,
-      transparent 62%
-    );
-    background-size: 250% 250%;
-    background-position: calc(50% + var(--nx) * 40%) calc(50% + var(--ny) * 40%);
-  }
-
-  .card:hover,
-  .card:focus-within {
-    --rim: var(--c-text);
-  }
-
-  /* ---- Ports: wire anchors on each edge ---- */
-  .port {
-    position: absolute;
-    z-index: 1;
-    width: 9px;
-    height: 9px;
-    background: var(--c-bg);
-    border: 1.5px solid var(--c-text-muted);
-  }
-
-  .port--n {
-    top: -5px;
-    left: calc(50% - 4.5px);
-  }
-
-  .port--s {
-    bottom: -5px;
-    left: calc(50% - 4.5px);
-  }
-
-  .port--e {
-    right: -5px;
-    top: calc(50% - 4.5px);
-  }
-
-  .port--w {
-    left: -5px;
-    top: calc(50% - 4.5px);
-  }
-
-  /* ---- Header ---- */
   .card-head {
     display: flex;
     justify-content: space-between;
@@ -154,7 +60,6 @@ const hasVisual = Astro.slots.has('visual');
     border-bottom: var(--line) solid var(--c-line);
   }
 
-  /* ---- Visual ---- */
   .card-visual {
     position: relative;
     aspect-ratio: 16 / 10;
@@ -169,7 +74,6 @@ const hasVisual = Astro.slots.has('visual');
     object-fit: cover;
   }
 
-  /* ---- Body ---- */
   .card-body {
     display: flex;
     flex-direction: column;

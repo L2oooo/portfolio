@@ -1,50 +1,43 @@
 /*
- * Wall script — progressive enhancement of the card list into the wall.
+ * Wall script — progressive enhancement of the 5 tiles into an infinite wall.
  * When JavaScript runs it:
- *   1. switches the container to "wall mode" (cards absolutely placed on a
- *      plane, using the CSS variables written at build time),
- *   2. runs a camera: drag (mouse / touch), inertia, elastic edges, wheel
- *      panning, and auto-centering of the card that receives keyboard focus,
- *   3. curves the wall: each card tilts and shrinks with its distance from the
- *      screen center (CSS 3D), and gets a glass reflection / lens fringe,
- *   4. draws orthogonal wires between the real on-screen port positions,
- *   5. drives the bottom bar: fly to a card, highlight the card in view, and
- *      switch between the wall and the plain list (choice remembered).
- * Without JS the plain card list stays as is.
+ *   1. fills the screen with a grid of tiles: the 5 real tiles plus clones,
+ *      following the pattern "tile of cell (c, r) = (c + 2r) mod 5", so two
+ *      neighbours are never the same tile;
+ *   2. recycles that grid like a torus: a tile leaving one side comes back on
+ *      the other, shifted by a multiple of 5 cells, so it stays the same tile
+ *      and is only moved (never rebuilt) — the wall is infinite;
+ *   3. runs a camera: drag (mouse / touch) with inertia, wheel panning, and
+ *      gliding to a tile (bottom bar, keyboard focus, "#node-x" in the URL);
+ *   4. curves the wall: each tile tilts and shrinks with its distance from the
+ *      screen center (CSS 3D), and gets a glass reflection / lens fringe;
+ *   5. drives the bottom bar and the wall / list toggle (choice remembered).
+ * Clones are hidden from keyboard and screen readers (only the 5 real tiles
+ * are announced) but stay clickable with the mouse.
+ * Without JS the plain list of the 5 tiles stays as is.
  * Exposes: initWall().
  */
-
-type Side = 'n' | 'e' | 's' | 'w';
-
-interface WallLink {
-  from: string;
-  fromSide: Side;
-  to: string;
-  toSide: Side;
-}
 
 interface Point {
   x: number;
   y: number;
 }
 
-interface Box {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+/** One cell of the recycled grid and the element shown in it. */
+interface Slot {
+  el: HTMLElement;
+  c: number;
+  r: number;
+  ref: string; // id of the real tile it shows, e.g. "node-projects"
 }
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
+const PERIOD = 5; // number of different tiles = length of the pattern
 const DRAG_THRESHOLD = 6; // px moved before a press becomes a drag (keeps clicks working)
 const FRICTION = 0.94; // velocity kept per 16ms frame during inertia
-const EDGE_RESISTANCE = 0.35; // share of the movement applied past the edges
-const SPRING = 0.18; // how fast the wall springs back inside its bounds
-const EASE_TO = 0.14; // how fast the camera glides to a target card
-const EDGE_PADDING = 120; // how far past the outermost cards the camera may go
+const EASE_TO = 0.12; // how fast the camera glides to a target tile
 
 // Curvature ("dome") settings
-const TILT_DEG = 14; // max rotation of a card one screen-half away from the center
+const TILT_DEG = 14; // max rotation of a tile one screen-half away from the center
 const SHRINK = 0.07; // scale lost per unit of squared distance
 const MIN_SCALE = 0.78;
 const PERSPECTIVE = 1600; // px, lower = stronger 3D
@@ -68,63 +61,54 @@ function saveView(view: View): void {
   }
 }
 
-function isSide(value: unknown): value is Side {
-  return value === 'n' || value === 'e' || value === 's' || value === 'w';
-}
-
-function isLink(value: unknown): value is WallLink {
-  if (typeof value !== 'object' || value === null) return false;
-  const l = value as Record<string, unknown>;
-  return typeof l.from === 'string' && typeof l.to === 'string' && isSide(l.fromSide) && isSide(l.toSide);
-}
-
-/** Links are serialized at build time in data-links; validate before use. */
-function parseLinks(raw: string | undefined): WallLink[] {
-  if (!raw) return [];
-  try {
-    const data: unknown = JSON.parse(raw);
-    return Array.isArray(data) ? (data as unknown[]).filter(isLink) : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Orthogonal path between two ports (right angles only, like a schematic). */
-function route(a: Point, aSide: Side, b: Point, bSide: Side): string {
-  const horizontalA = aSide === 'e' || aSide === 'w';
-  const horizontalB = bSide === 'e' || bSide === 'w';
-  if (horizontalA && horizontalB) {
-    const mid = (a.x + b.x) / 2;
-    return `M${a.x} ${a.y} H${mid} V${b.y} H${b.x}`;
-  }
-  if (!horizontalA && !horizontalB) {
-    const mid = (a.y + b.y) / 2;
-    return `M${a.x} ${a.y} V${mid} H${b.x} V${b.y}`;
-  }
-  // Mixed: leave A along its axis, then turn once toward B
-  return horizontalA ? `M${a.x} ${a.y} H${b.x} V${b.y}` : `M${a.x} ${a.y} V${b.y} H${b.x}`;
-}
-
 const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v));
 const round = (v: number): number => Math.round(v * 1000) / 1000;
+const mod = (a: number, n: number): number => ((a % n) + n) % n;
+
+/** A copy of a real tile: clickable with the mouse, invisible to keyboard and screen readers. */
+function makeClone(tile: HTMLElement): HTMLElement {
+  const clone = tile.cloneNode(true) as HTMLElement;
+  clone.removeAttribute('id');
+  clone.setAttribute('aria-hidden', 'true');
+  clone.dataset.clone = '';
+  clone.style.viewTransitionName = 'none'; // transition names must stay unique
+  clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+  clone.querySelectorAll('[aria-labelledby]').forEach((n) => n.removeAttribute('aria-labelledby'));
+  clone.querySelectorAll('a, button').forEach((n) => n.setAttribute('tabindex', '-1'));
+  // Only one <h1> per page: the clone's becomes a <div> with the same look
+  const h1 = clone.querySelector('h1');
+  if (h1) {
+    const div = document.createElement('div');
+    for (const attr of h1.attributes) div.setAttribute(attr.name, attr.value);
+    div.append(...h1.childNodes);
+    h1.replaceWith(div);
+  }
+  return clone;
+}
 
 export function initWall(): void {
   const wall = document.querySelector<HTMLElement>('[data-wall]');
   const plane = wall?.querySelector<HTMLElement>('[data-plane]');
-  const svg = wall?.querySelector<SVGSVGElement>('[data-wires]');
-  if (!wall || !plane || !svg) return;
+  if (!wall || !plane) return;
 
-  const links = parseLinks(wall.dataset.links);
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const cards = [...plane.querySelectorAll<HTMLElement>('[data-node]')];
+  const realTiles = [...plane.querySelectorAll<HTMLElement>('[data-ref]')]; // reading order
+  if (realTiles.length === 0) return;
 
-  // ---- Camera state: plane translation (px) and zoom ----
-  const cam = { x: 0, y: 0, scale: 1 };
+  // ---- Grid state ----
+  let slots: Slot[] = [];
+  let cols = 0;
+  let rows = 0;
+  let tileW = 0;
+  let tileH = 0;
+  let cellW = 0;
+  let cellH = 0;
+
+  // ---- Camera state (translation of the whole grid, in px) ----
+  const cam = { x: 0, y: 0 };
   const velocity = { x: 0, y: 0 }; // px per ms
-  let target: Point | null = null; // when set, the camera glides there
-  let bounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 }; // allowed camera translations
+  let target: Point | null = null;
   let frame = 0;
-  let userMoved = false; // once the visitor moves the wall, never recenter on our own
   let view: View = 'wall';
 
   const bar = document.querySelector<HTMLElement>('[data-wall-bar]');
@@ -132,145 +116,97 @@ export function initWall(): void {
   const toggle = bar?.querySelector<HTMLButtonElement>('[data-view-toggle]');
   const toggleLabel = toggle?.querySelector<HTMLElement>('[data-view-label]');
 
-  // Flat card boxes in plane coordinates, measured once per layout (curvature ignored)
-  const boxes = new Map<HTMLElement, Box>();
-  const boxOf = (el: HTMLElement): Box => boxes.get(el) ?? { x: 0, y: 0, w: 0, h: 0 };
-
+  /** Tile size and spacing, read from the CSS (--tile-w, --tile-gap, aspect-ratio). */
   const measure = (): void => {
-    cards.forEach((c) => (c.style.transform = 'none')); // measure without the curvature
-    const p = plane.getBoundingClientRect();
-    for (const c of cards) {
-      const r = c.getBoundingClientRect();
-      boxes.set(c, {
-        x: (r.left - p.left) / cam.scale,
-        y: (r.top - p.top) / cam.scale,
-        w: r.width / cam.scale,
-        h: r.height / cam.scale,
-      });
-    }
+    const first = realTiles[0]!;
+    tileW = first.offsetWidth;
+    tileH = first.offsetHeight;
+    const gap = parseFloat(getComputedStyle(wall).getPropertyValue('--tile-gap')) || 24;
+    cellW = tileW + gap;
+    cellH = tileH + gap;
   };
 
-  // ---- Curvature: tilt + shrink each card by its distance to the screen center ----
-  const curve = (): void => {
-    const halfW = wall.clientWidth / 2;
-    const halfH = wall.clientHeight / 2;
-    const flat = reducedMotion.matches;
-    for (const c of cards) {
-      const b = boxOf(c);
-      // Card center on screen, relative to the wall center, in "screen halves"
-      const nx = clamp((cam.x + (b.x + b.w / 2) * cam.scale - halfW) / halfW, -2, 2);
-      const ny = clamp((cam.y + (b.y + b.h / 2) * cam.scale - halfH) / halfH, -2, 2);
-      const d2 = nx * nx + ny * ny;
-      c.style.setProperty('--nx', String(round(nx)));
-      c.style.setProperty('--ny', String(round(ny)));
-      c.style.setProperty('--ab', String(round(Math.min(1, Math.sqrt(d2) * 0.7))));
-      if (flat) {
-        c.style.transform = 'none';
-        continue;
+  /** Creates the grid: enough cells to cover the screen, in multiples of the pattern. */
+  const buildGrid = (): void => {
+    plane.querySelectorAll('[data-clone]').forEach((n) => n.remove());
+    cols = PERIOD * Math.ceil((wall.clientWidth + 2 * cellW) / (PERIOD * cellW));
+    rows = PERIOD * Math.ceil((wall.clientHeight + 2 * cellH) / (PERIOD * cellH));
+    const placed = new Set<number>();
+    slots = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const k = (c + 2 * r) % PERIOD;
+        const real = realTiles[k % realTiles.length]!;
+        let el = real;
+        if (placed.has(k)) {
+          el = makeClone(real);
+          plane.append(el);
+        }
+        placed.add(k);
+        slots.push({ el, c, r, ref: real.dataset.ref ?? '' });
       }
-      // Cards turn their far edge away from the viewer: a dome bulging toward us
-      // (checked visually: a card on the right gets a smaller right edge)
-      const rotY = round(nx * TILT_DEG);
-      const rotX = round(-ny * TILT_DEG * 0.8);
-      const s = round(Math.max(MIN_SCALE, 1 - d2 * SHRINK));
-      c.style.transform = `perspective(${PERSPECTIVE}px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${s})`;
     }
   };
 
-  // ---- Wires: measured from the real (curved) port positions on screen ----
-  const markPorts = (): void => {
-    plane.querySelectorAll('.is-linked').forEach((el) => el.classList.remove('is-linked'));
-    for (const link of links) {
-      document.getElementById(link.from)?.querySelector(`[data-port="${link.fromSide}"]`)?.classList.add('is-linked');
-      document.getElementById(link.to)?.querySelector(`[data-port="${link.toSide}"]`)?.classList.add('is-linked');
-    }
-  };
-
-  const paths = links.map((link) => {
-    const path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('class', 'wire');
-    path.dataset.from = link.from;
-    path.dataset.to = link.to;
-    svg.append(path);
-    return path;
+  /** Top-left corner of a slot on screen, wrapped so the grid never ends. */
+  const positionOf = (s: Slot): Point => ({
+    x: mod(s.c * cellW + cam.x + cellW, cols * cellW) - cellW,
+    y: mod(s.r * cellH + cam.y + cellH, rows * cellH) - cellH,
   });
 
-  const drawWires = (): void => {
-    const w = wall.getBoundingClientRect();
-    const portCenter = (id: string, side: Side): Point | null => {
-      const port = document.getElementById(id)?.querySelector(`[data-port="${side}"]`);
-      if (!port) return null;
-      const r = port.getBoundingClientRect();
-      return { x: round(r.left + r.width / 2 - w.left), y: round(r.top + r.height / 2 - w.top) };
-    };
-    links.forEach((link, i) => {
-      const a = portCenter(link.from, link.fromSide);
-      const b = portCenter(link.to, link.toSide);
-      if (a && b) paths[i]?.setAttribute('d', route(a, link.fromSide, b, link.toSide));
-    });
-  };
-
-  /** Highlights, in the bar, the card nearest to the screen center. */
-  let currentId = '';
-  const markCurrent = (): void => {
-    const halfW = wall.clientWidth / 2;
-    const halfH = wall.clientHeight / 2;
-    let best = '';
-    let bestDist = Infinity;
-    for (const c of cards) {
-      const b = boxOf(c);
-      const d = Math.hypot(cam.x + (b.x + b.w / 2) * cam.scale - halfW, cam.y + (b.y + b.h / 2) * cam.scale - halfH);
-      if (d < bestDist) {
-        bestDist = d;
-        best = c.id;
-      }
-    }
-    if (best === currentId) return;
-    currentId = best;
+  // ---- Bottom bar: highlight the tile nearest to the screen center ----
+  let currentRef = '';
+  const markCurrent = (ref: string): void => {
+    if (ref === currentRef) return;
+    currentRef = ref;
     for (const link of barLinks) {
-      if (link.dataset.target === best) link.setAttribute('aria-current', 'true');
+      if (link.dataset.target === ref) link.setAttribute('aria-current', 'true');
       else link.removeAttribute('aria-current');
     }
   };
 
-  /** Applies the camera: plane position, card curvature, wires, bar highlight. */
+  /** Places every tile, applies the curvature, updates the bar. */
   const render = (): void => {
-    plane.style.transform = `translate3d(${cam.x}px, ${cam.y}px, 0) scale(${cam.scale})`;
-    curve();
-    drawWires();
-    markCurrent();
-  };
-
-  /** Camera translation that puts a plane point at the center of the screen. */
-  const centerOn = (p: Point): Point => ({
-    x: wall.clientWidth / 2 - p.x * cam.scale,
-    y: wall.clientHeight / 2 - p.y * cam.scale,
-  });
-
-  /** The screen center may travel anywhere over the cards, plus a margin. */
-  const computeBounds = (): void => {
-    const all = cards.map(boxOf);
-    if (all.length === 0) return;
-    const minX = Math.min(...all.map((b) => b.x)) - EDGE_PADDING;
-    const minY = Math.min(...all.map((b) => b.y)) - EDGE_PADDING;
-    const maxX = Math.max(...all.map((b) => b.x + b.w)) + EDGE_PADDING;
-    const maxY = Math.max(...all.map((b) => b.y + b.h)) + EDGE_PADDING;
     const halfW = wall.clientWidth / 2;
     const halfH = wall.clientHeight / 2;
-    bounds = {
-      minX: halfW - maxX * cam.scale,
-      maxX: halfW - minX * cam.scale,
-      minY: halfH - maxY * cam.scale,
-      maxY: halfH - minY * cam.scale,
-    };
+    const flat = reducedMotion.matches;
+    let nearest = '';
+    let nearestDist = Infinity;
+
+    for (const s of slots) {
+      const p = positionOf(s);
+      // Tile center relative to the screen center, in "screen halves"
+      const dx = p.x + tileW / 2 - halfW;
+      const dy = p.y + tileH / 2 - halfH;
+      const nx = clamp(dx / halfW, -2, 2);
+      const ny = clamp(dy / halfH, -2, 2);
+      const d2 = nx * nx + ny * ny;
+
+      const dist = Math.hypot(dx, dy);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = s.ref;
+      }
+
+      const el = s.el;
+      el.style.setProperty('--nx', String(round(nx)));
+      el.style.setProperty('--ny', String(round(ny)));
+      el.style.setProperty('--ab', String(round(Math.min(1, Math.sqrt(d2) * 0.7))));
+      const move = `translate3d(${round(p.x)}px, ${round(p.y)}px, 0)`;
+      if (flat) {
+        el.style.transform = move;
+        continue;
+      }
+      // Dome bulging toward the viewer: a tile on the right gets a smaller right edge
+      const rotY = round(nx * TILT_DEG);
+      const rotX = round(-ny * TILT_DEG * 0.8);
+      const scale = round(Math.max(MIN_SCALE, 1 - d2 * SHRINK));
+      el.style.transform = `${move} perspective(${PERSPECTIVE}px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${scale})`;
+    }
+    markCurrent(nearest);
   };
 
-  const outside = (): Point => ({
-    x: cam.x - clamp(cam.x, bounds.minX, bounds.maxX),
-    y: cam.y - clamp(cam.y, bounds.minY, bounds.maxY),
-  });
-
-  // ---- Animation loop: inertia, spring-back and glides share one loop ----
+  // ---- Animation loop: inertia and glides share one loop ----
   let last = 0;
   const tick = (now: number): void => {
     const dt = Math.min(now - last, 64) || 16;
@@ -291,22 +227,10 @@ export function initWall(): void {
       const decay = Math.pow(FRICTION, k);
       velocity.x *= decay;
       velocity.y *= decay;
-
-      const over = outside();
-      if (over.x !== 0 || over.y !== 0) {
-        // Past an edge: kill the momentum faster and spring back inside
-        velocity.x *= 0.6;
-        velocity.y *= 0.6;
-        cam.x -= over.x * Math.min(1, SPRING * k);
-        cam.y -= over.y * Math.min(1, SPRING * k);
-      }
     }
     render();
 
-    const moving =
-      target !== null ||
-      Math.hypot(velocity.x, velocity.y) > 0.01 ||
-      Math.hypot(outside().x, outside().y) > 0.5;
+    const moving = target !== null || Math.hypot(velocity.x, velocity.y) > 0.01;
     frame = moving ? requestAnimationFrame(tick) : 0;
   };
 
@@ -322,23 +246,43 @@ export function initWall(): void {
     target = null;
   };
 
-  /** Point of a card the camera centers on (its top part if taller than the screen). */
-  const focusPoint = (el: HTMLElement): Point => {
-    const b = boxOf(el);
-    return { x: b.x + b.w / 2, y: b.y + Math.min(b.h, wall.clientHeight) / 2 };
+  /** Camera move that brings a slot to the screen center. */
+  const deltaTo = (s: Slot): Point => {
+    const p = positionOf(s);
+    return {
+      x: wall.clientWidth / 2 - (p.x + tileW / 2),
+      y: wall.clientHeight / 2 - (p.y + tileH / 2),
+    };
   };
 
-  /** Moves the camera to a card (instantly under reduced motion). */
-  const goTo = (el: HTMLElement): void => {
-    const dest = centerOn(focusPoint(el));
+  /** Glides to a slot (instantly under reduced motion). */
+  const glideTo = (s: Slot): void => {
+    const d = deltaTo(s);
     stopMotion();
     if (reducedMotion.matches) {
-      Object.assign(cam, dest);
+      cam.x += d.x;
+      cam.y += d.y;
       render();
     } else {
-      target = dest;
+      target = { x: cam.x + d.x, y: cam.y + d.y };
       startLoop();
     }
+  };
+
+  /** The copy of a tile ("node-x") closest to the screen center. */
+  const nearestSlot = (ref: string): Slot | undefined => {
+    let best: Slot | undefined;
+    let bestDist = Infinity;
+    for (const s of slots) {
+      if (s.ref !== ref) continue;
+      const d = deltaTo(s);
+      const dist = Math.hypot(d.x, d.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = s;
+      }
+    }
+    return best;
   };
 
   // ---- Drag (mouse, pen and touch through Pointer Events) ----
@@ -349,6 +293,7 @@ export function initWall(): void {
 
   wall.addEventListener('pointerdown', (e) => {
     if (view !== 'wall' || e.button !== 0) return;
+    suppressClick = false; // a new press: any stale "ignore next click" is over
     stopMotion();
     press = { id: e.pointerId, x: e.clientX, y: e.clientY, camX: cam.x, camY: cam.y };
     dragging = false;
@@ -362,17 +307,12 @@ export function initWall(): void {
     if (!dragging) {
       if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
       dragging = true;
-      userMoved = true;
       wall.setPointerCapture(e.pointerId);
       wall.classList.add('is-dragging');
     }
-    // Free movement inside the bounds, resistance beyond them
-    const freeX = clamp(press.camX + dx, bounds.minX, bounds.maxX);
-    const freeY = clamp(press.camY + dy, bounds.minY, bounds.maxY);
-    cam.x = freeX + (press.camX + dx - freeX) * EDGE_RESISTANCE;
-    cam.y = freeY + (press.camY + dy - freeY) * EDGE_RESISTANCE;
+    cam.x = press.camX + dx;
+    cam.y = press.camY + dy;
     render();
-
     samples.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
     samples = samples.filter((s) => e.timeStamp - s.t < 100); // last 100ms only
   });
@@ -382,28 +322,41 @@ export function initWall(): void {
     press = null;
     if (!dragging) return;
     dragging = false;
-    suppressClick = true; // the click that follows a drag must not open a card
+    // The click that follows a drag must not open a tile. Some browsers never
+    // fire that click: disarm right after, so the next real click still works
+    suppressClick = true;
+    setTimeout(() => (suppressClick = false), 0);
     wall.classList.remove('is-dragging');
-
     const first = samples[0];
     const lastSample = samples[samples.length - 1];
     if (first && lastSample && lastSample.t > first.t && !reducedMotion.matches) {
       velocity.x = (lastSample.x - first.x) / (lastSample.t - first.t);
       velocity.y = (lastSample.y - first.y) / (lastSample.t - first.t);
+      startLoop();
     }
-    startLoop(); // inertia and/or spring-back
   };
 
   wall.addEventListener('pointerup', release);
   wall.addEventListener('pointercancel', release);
 
+  // Clicks: swallow the one ending a drag; otherwise give the view-transition
+  // name to the copy that was actually clicked, so that one morphs into the page
   wall.addEventListener(
     'click',
     (e) => {
-      if (!suppressClick) return;
-      suppressClick = false;
-      e.preventDefault();
-      e.stopPropagation();
+      if (suppressClick) {
+        suppressClick = false;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      if (view !== 'wall' || !(e.target instanceof Element)) return;
+      const tile = e.target.closest<HTMLElement>('[data-ref]');
+      const real = tile?.dataset.ref ? document.getElementById(tile.dataset.ref) : null;
+      if (!tile || !real || tile === real) return;
+      const name = real.style.viewTransitionName;
+      real.style.viewTransitionName = 'none';
+      tile.style.viewTransitionName = name;
     },
     true,
   );
@@ -415,20 +368,20 @@ export function initWall(): void {
       if (view !== 'wall' || e.ctrlKey) return; // list view scrolls normally; pinch-zoom stays native
       e.preventDefault();
       stopMotion();
-      userMoved = true;
       const factor = e.deltaMode === 1 ? 16 : 1; // lines -> px
-      cam.x = clamp(cam.x - e.deltaX * factor, bounds.minX, bounds.maxX);
-      cam.y = clamp(cam.y - e.deltaY * factor, bounds.minY, bounds.maxY);
+      cam.x -= e.deltaX * factor;
+      cam.y -= e.deltaY * factor;
       render();
     },
     { passive: false },
   );
 
-  // ---- Keyboard: bring the focused card into view ----
+  // ---- Keyboard: bring the focused (real) tile into view ----
   wall.addEventListener('focusin', (e) => {
     if (view !== 'wall' || dragging || !(e.target instanceof Element)) return;
-    const card = e.target.closest<HTMLElement>('[data-node]');
-    if (card) goTo(card);
+    const tile = e.target.closest<HTMLElement>('[data-ref]');
+    const slot = slots.find((s) => s.el === tile);
+    if (slot) glideTo(slot);
   });
   // The browser may scroll the overflow:hidden wall itself on focus: undo it
   wall.addEventListener('scroll', () => {
@@ -437,26 +390,7 @@ export function initWall(): void {
     wall.scrollLeft = 0;
   });
 
-  // ---- Setup ----
-  const layout = (): void => {
-    wall.classList.add('is-wall');
-    cam.scale = 1;
-    measure();
-    markPorts();
-    computeBounds();
-  };
-
-  // Opening card: the one named in the URL hash ("/#node-projects", used by
-  // "back to the wall" links), otherwise Léo's card
-  const hashTarget = location.hash ? document.getElementById(location.hash.slice(1)) : null;
-  const startCard = hashTarget?.matches('[data-node]') ? hashTarget : document.getElementById('node-leo');
-
-  const centerOnStart = (): void => {
-    if (startCard) Object.assign(cam, centerOn(focusPoint(startCard)));
-    render();
-  };
-
-  // ---- Views: the curved wall, or the plain list (the no-JS layout) ----
+  // ---- Views: the infinite wall, or the plain list (the no-JS layout) ----
   const updateToggle = (): void => {
     if (!toggle) return;
     toggle.hidden = false;
@@ -466,42 +400,58 @@ export function initWall(): void {
     }
   };
 
+  /** Centers a real tile instantly (opening, or coming back from the list). */
+  const centerOn = (ref: string): void => {
+    const slot = slots.find((s) => s.el.id === ref) ?? nearestSlot(ref);
+    if (slot) {
+      const d = deltaTo(slot);
+      cam.x += d.x;
+      cam.y += d.y;
+    }
+    render();
+  };
+
+  const layout = (): void => {
+    wall.classList.add('is-wall');
+    measure();
+    buildGrid();
+  };
+
   const enterList = (): void => {
     view = 'list';
     stopMotion();
     cancelAnimationFrame(frame);
     frame = 0;
     wall.classList.remove('is-wall', 'is-dragging');
-    plane.style.transform = '';
-    for (const c of cards) {
-      c.style.transform = '';
-      ['--nx', '--ny', '--ab'].forEach((v) => c.style.removeProperty(v));
+    plane.querySelectorAll('[data-clone]').forEach((n) => n.remove());
+    slots = [];
+    for (const tile of realTiles) {
+      tile.style.transform = '';
+      ['--nx', '--ny', '--ab'].forEach((v) => tile.style.removeProperty(v));
     }
-    paths.forEach((p) => p.removeAttribute('d'));
     barLinks.forEach((l) => l.removeAttribute('aria-current'));
-    currentId = '';
+    currentRef = '';
     updateToggle();
   };
 
-  const enterWall = (focusCard: HTMLElement | null): void => {
+  const enterWall = (ref: string): void => {
     view = 'wall';
     layout();
-    if (focusCard) Object.assign(cam, centerOn(focusPoint(focusCard)));
-    render();
+    centerOn(ref);
     window.scrollTo(0, 0);
     updateToggle();
   };
 
-  /** In the list view, the card taking the most room on screen (to resume there). */
-  const mostVisibleCard = (): HTMLElement | null => {
-    let best: HTMLElement | null = null;
+  /** In the list view, the tile taking the most room on screen (to resume there). */
+  const mostVisibleTile = (): string => {
+    let best = realTiles[0]?.id ?? '';
     let bestVisible = 0;
-    for (const c of cards) {
-      const r = c.getBoundingClientRect();
+    for (const tile of realTiles) {
+      const r = tile.getBoundingClientRect();
       const visible = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
       if (visible > bestVisible) {
         bestVisible = visible;
-        best = c;
+        best = tile.id;
       }
     }
     return best;
@@ -512,49 +462,51 @@ export function initWall(): void {
       enterList();
       saveView('list');
     } else {
-      enterWall(mostVisibleCard());
+      enterWall(mostVisibleTile());
       saveView('wall');
     }
   });
 
-  // Bar links: fly to the card on the wall (the list view keeps the native anchor scroll)
+  // Bar links: glide to the nearest copy (the list view keeps the native anchor scroll)
   for (const link of barLinks) {
     link.addEventListener('click', (e) => {
-      if (view !== 'wall') return;
-      const card = link.dataset.target ? document.getElementById(link.dataset.target) : null;
-      if (!card) return;
+      if (view !== 'wall' || !link.dataset.target) return;
+      const slot = nearestSlot(link.dataset.target);
+      if (!slot) return;
       e.preventDefault();
-      userMoved = true;
-      goTo(card);
-      // Move keyboard / screen-reader focus to the card itself
-      card.setAttribute('tabindex', '-1');
-      card.focus({ preventScroll: true });
+      glideTo(slot);
+      // Keyboard / screen-reader focus goes to the real tile's link
+      document.getElementById(link.dataset.target)?.querySelector<HTMLElement>('a')?.focus({ preventScroll: true });
     });
   }
+
+  // ---- Start ----
+  // Opening tile: the one named in the URL hash ("/#node-projects", used by
+  // "back to the wall" links), otherwise Léo's tile
+  const hashRef = location.hash.slice(1);
+  const startRef = realTiles.some((t) => t.id === hashRef) ? hashRef : (realTiles[0]?.id ?? '');
 
   if (readView() === 'list') {
     enterList();
   } else {
     layout();
-    centerOnStart();
+    centerOn(startRef);
     updateToggle();
-    // The hash also makes the browser scroll the page toward the card: undo it
-    if (hashTarget) requestAnimationFrame(() => window.scrollTo(0, 0));
+    // The hash also makes the browser scroll the page toward the tile: undo it
+    if (hashRef) requestAnimationFrame(() => window.scrollTo(0, 0));
   }
 
-  // Size changes (window resize, fonts loaded) move ports: measure again
+  // Screen size changes: new tile size and grid, same tile in the center
+  let lastSize = `${wall.clientWidth}x${wall.clientHeight}`;
   new ResizeObserver(() => {
-    if (view !== 'wall') return;
+    const size = `${wall.clientWidth}x${wall.clientHeight}`;
+    if (view !== 'wall' || size === lastSize) return;
+    lastSize = size;
+    const ref = currentRef || startRef;
     layout();
-    render();
-    startLoop(); // springs back inside if the new bounds require it
+    centerOn(ref);
   }).observe(wall);
-  void document.fonts.ready.then(() => {
-    if (view !== 'wall') return;
-    layout();
-    if (userMoved) render();
-    else centerOnStart();
-  });
+
   reducedMotion.addEventListener('change', () => {
     if (view === 'wall') render();
   });

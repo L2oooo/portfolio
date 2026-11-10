@@ -1,0 +1,94 @@
+---
+/*
+ * WallTile — one card of the infinite wall: a full-bleed visual (named slot
+ * "visual"), a dark veil for legibility, then only a title and a subtitle.
+ * The whole tile is one link to its section page.
+ * data-ref identifies the section for the wall script (clones keep it, the
+ * id stays on the real tile only); the view-transition name lets the tile
+ * turn into the head of its section page.
+ */
+import type { Section } from '../../i18n/routes';
+
+interface Props {
+  id: string; // node id of the real tile, e.g. "node-background"
+  section: Section;
+  title: string;
+  subtitle: string;
+  href: string;
+  heading?: 'h1' | 'h2'; // Léo's tile carries the page's h1
+}
+
+const { id, section, title, subtitle, href, heading = 'h2' } = Astro.props;
+const Heading = heading;
+---
+
+<article id={id} class="tile glass" data-ref={id} style={`view-transition-name: card-${section}`}>
+  <div class="tile-visual" aria-hidden="true">
+    <slot name="visual" />
+  </div>
+  <div class="tile-text">
+    <Heading class="tile-title">
+      <a href={href} class="stretched-link">{title}</a>
+    </Heading>
+    <p class="tile-subtitle">{subtitle}</p>
+  </div>
+</article>
+
+<style>
+  .tile {
+    display: flex;
+    align-items: flex-end;
+    isolation: isolate; /* own stacking context: the visual can sit under the text */
+    aspect-ratio: 26 / 17; /* same shape for every tile, like a wall of photos */
+    overflow: hidden;
+  }
+
+  .tile-visual {
+    position: absolute;
+    inset: 0;
+    z-index: -1; /* under the text, still inside the tile */
+    border-radius: inherit;
+    overflow: hidden;
+  }
+
+  .tile-visual :global(img),
+  .tile-visual :global(svg),
+  .tile-visual > :global(*) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Dark veil at the bottom: keeps the title readable over any image */
+  .tile-visual::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, var(--c-bg) 92%, transparent) 0%,
+      color-mix(in srgb, var(--c-bg) 55%, transparent) 38%,
+      transparent 70%
+    );
+  }
+
+  /* Not positioned on purpose: the title link's ::after must cover the whole tile */
+  .tile-text {
+    padding: clamp(1rem, 4%, 2rem);
+  }
+
+  .tile-title {
+    font-size: clamp(1.75rem, 1rem + 2.5vw, 3.25rem);
+    line-height: 0.95;
+  }
+
+  .tile-title a {
+    color: var(--c-text);
+  }
+
+  .tile-subtitle {
+    margin-top: var(--space-2);
+    font-size: clamp(0.8125rem, 0.7rem + 0.4vw, 1.0625rem);
+    color: var(--c-text-muted);
+  }
+</style>

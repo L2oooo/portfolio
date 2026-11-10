@@ -1,24 +1,20 @@
 ---
 /*
- * Wall — the 5 cards of the home page, in logical reading order:
- * Léo → Projects → Background → Skills → Contact.
+ * Wall — the 5 real tiles of the home page, in reading order:
+ * Léo → Projects → Background → Skills → Contact. Each one is a full-bleed
+ * visual + title + subtitle linking to its section page.
  * This HTML is the "list view": complete and readable without JavaScript.
- * With JavaScript (src/scripts/wall.ts), the same cards are placed on a plane
- * (positions from src/data/wall.ts) and joined by orthogonal wires.
- * The Projects card leads to the projects page, with a view transition
- * (shared name "projects-card").
+ * With JavaScript (src/scripts/wall.ts), the tiles are cloned and recycled
+ * into an infinite, draggable, curved wall that fills the screen.
  */
-import WallCard from './WallCard.astro';
+import WallTile from './WallTile.astro';
 import BlueprintPlaceholder from './BlueprintPlaceholder.astro';
 import TopologyMap from '../TopologyMap.astro';
 import BottomBar from './BottomBar.astro';
 import { useTranslations, type Lang } from '../../i18n/ui';
-import { projectsPath } from '../../i18n/routes';
-import { getProjects, getExperiences } from '../../lib/content';
+import { sectionPath } from '../../i18n/routes';
+import { getProjects } from '../../lib/content';
 import { buildGraph } from '../../data/graph';
-import { DOMAINS } from '../../data/domains';
-import { SKILLS, LANGUAGES } from '../../data/skills';
-import { buildWall, placementStyle, DESKTOP, MOBILE } from '../../data/wall';
 
 interface Props {
   lang: Lang;
@@ -26,114 +22,67 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
-const pad = (n: number): string => String(n).padStart(2, '0');
-
 const projects = await getProjects(lang);
-const experiences = await getExperiences(lang);
-const domainGraph = buildGraph([]); // LÉO + domains only, for the Skills card
-
-const layout = buildWall(DESKTOP);
-const mobileLayout = buildWall(MOBILE);
-const place = (id: string): string | undefined => {
-  const desktop = layout.placements[id];
-  const mobile = mobileLayout.placements[id];
-  return desktop && mobile ? placementStyle(desktop, mobile) : undefined;
-};
+const projectCount = String(projects.length).padStart(2, '0');
 ---
 
-<div class="wall" data-wall data-links={JSON.stringify(layout.links)}>
-<!-- Wires are drawn in screen space, under the cards (see src/scripts/wall.ts) -->
-<svg class="wires" data-wires aria-hidden="true"></svg>
-<div class="plane" data-plane>
-  <!-- Léo: the root node -->
-  <WallCard id="node-leo" style={place('node-leo')} kind="root" node={0} label={t('card.root')} meta="Paris, FR">
-    <BlueprintPlaceholder slot="visual" seed="leo-salvayre" label="portrait" />
-    <h1 class="name">Léo<br />Salvayre<span class="dot" aria-hidden="true"></span></h1>
-    <p class="tagline">{t('hero.tagline')}</p>
-    <ul class="meta" role="list">
-      <li class="mono"><span class="status" aria-hidden="true"></span>{t('hero.status')}</li>
-      <li class="mono">{t('hero.loc')}</li>
-    </ul>
-  </WallCard>
+<div class="wall" data-wall>
+  <div class="plane" data-plane>
+    <WallTile
+      id="node-leo"
+      section="about"
+      heading="h1"
+      title="Léo Salvayre"
+      subtitle={t('tile.leo')}
+      href={sectionPath(lang, 'about')}
+    >
+      <BlueprintPlaceholder slot="visual" seed="leo-salvayre" label="portrait" />
+    </WallTile>
 
-  <!-- Projects: a preview that opens the projects page -->
-  <WallCard
-    id="node-projects"
-    style={`${place('node-projects') ?? ''}; view-transition-name: card-projects`}
-    kind="hub"
-    node={1}
-    label={t('card.hub')}
-    meta={pad(projects.length)}
-  >
-    <div slot="visual" class="mosaic" aria-hidden="true">
-      {projects.slice(0, 6).map((p) => <BlueprintPlaceholder seed={p.slug} />)}
-    </div>
-    <h2 class="section-title">
-      <a href={projectsPath(lang)} class="stretched-link">{t('hub.title')}</a>
-    </h2>
-    <ol class="titles" role="list">
-      {projects.map((p, i) => (
-        <li>
-          <span class="mono">{pad(i + 1)}</span>
-          <span>{p.data.title}</span>
-          <span class="mono">{p.data.domains.map((d) => t(`domain.${d}`)).join(' · ')}</span>
-        </li>
-      ))}
-    </ol>
-    <p class="cta mono" aria-hidden="true">{t('hub.cta')} →</p>
-  </WallCard>
-
-  <!-- Background as a traceroute -->
-  <WallCard id="node-background" style={place('node-background')} kind="section" node={2} label={t('card.background')}>
-    <h2 class="section-title">{t('background.title')}</h2>
-    <ol class="trace" role="list">
-      {experiences.map((e, i) => (
-        <li>
-          <span class="mono hop">{t('background.hop')} {pad(i + 1)}</span>
-          <span class="mono years">
-            {e.data.start.slice(0, 4)}–{e.data.end?.slice(0, 4) ?? t('content.present')}
-          </span>
-          <span class="org">{e.data.org}</span>
-          <span class="role muted">{e.data.role}</span>
-        </li>
-      ))}
-    </ol>
-  </WallCard>
-
-  <!-- Skills, with the radial domain map -->
-  <WallCard id="node-skills" style={place('node-skills')} kind="section" node={3} label={t('card.skills')}>
-    <h2 class="section-title">{t('skills.title')}</h2>
-    <div class="skills-map">
-      <TopologyMap lang={lang} graph={domainGraph} compact />
-    </div>
-    <dl class="skills">
-      {DOMAINS.map((d) => (
-        <div>
-          <dt class="mono">{t(`domain.${d}`)}</dt>
-          <dd>{SKILLS[d][lang].join(' · ')}</dd>
-        </div>
-      ))}
-      <div>
-        <dt class="mono">{t('skills.languages')}</dt>
-        <dd>{LANGUAGES[lang].join(' · ')}</dd>
+    <WallTile
+      id="node-projects"
+      section="projects"
+      title={t('hub.title')}
+      subtitle={t('tile.projects').replace('{n}', projectCount)}
+      href={sectionPath(lang, 'projects')}
+    >
+      <div slot="visual" class="mosaic">
+        {projects.slice(0, 6).map((p) => <BlueprintPlaceholder seed={p.slug} />)}
       </div>
-    </dl>
-  </WallCard>
+    </WallTile>
 
-  <!-- Contact (placeholders until Léo provides details) -->
-  <WallCard id="node-contact" style={place('node-contact')} kind="section" node={4} label={t('card.contact')}>
-    <h2 class="section-title">{t('contact.title')}</h2>
-    <p class="muted">{t('contact.text')}</p>
-    <ul class="channels" role="list">
-      {(['contact.email', 'contact.linkedin', 'contact.github'] as const).map((key) => (
-        <li class="mono">
-          <span>{t(key)}</span>
-          <span class="muted">{t('contact.soon')}</span>
-        </li>
-      ))}
-    </ul>
-  </WallCard>
-</div>
+    <WallTile
+      id="node-background"
+      section="background"
+      title={t('background.title')}
+      subtitle={t('tile.background')}
+      href={sectionPath(lang, 'background')}
+    >
+      <BlueprintPlaceholder slot="visual" seed="parcours-traceroute" label="traceroute" />
+    </WallTile>
+
+    <WallTile
+      id="node-skills"
+      section="skills"
+      title={t('skills.title')}
+      subtitle={t('tile.skills')}
+      href={sectionPath(lang, 'skills')}
+    >
+      <div slot="visual" class="map-visual">
+        <TopologyMap lang={lang} graph={buildGraph([])} compact />
+      </div>
+    </WallTile>
+
+    <WallTile
+      id="node-contact"
+      section="contact"
+      title={t('card.contact')}
+      subtitle={t('tile.contact')}
+      href={sectionPath(lang, 'contact')}
+    >
+      <BlueprintPlaceholder slot="visual" seed="contact-signal" label="signal" />
+    </WallTile>
+  </div>
 </div>
 
 <BottomBar lang={lang} />
@@ -144,29 +93,34 @@ const place = (id: string): string | undefined => {
 </script>
 
 <style>
-  /* ---- List view layout (the no-JS / "Liste" mode) ---- */
+  /* ---- List view (no JS, or the "List" toggle): a simple grid of the 5 tiles ---- */
   .wall {
+    --tile-w: 250px; /* tile width on the wall (phones): neighbours peek in from the sides */
+    --tile-gap: 16px; /* space between tiles on the wall */
     max-width: var(--max-width);
     margin-inline: auto;
     padding: var(--space-6) var(--gutter);
   }
 
+  @media (min-width: 900px) {
+    .wall {
+      --tile-w: 520px;
+      --tile-gap: 32px;
+    }
+  }
+
   .plane {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
     gap: var(--space-5);
   }
 
-  .wires {
-    display: none;
-  }
-
-  /* List view: leave room so the floating bar never covers the last lines */
+  /* Leave room so the floating bar never covers the last lines */
   :global(body:has(.wall:not(.is-wall))) {
     padding-bottom: 72px;
   }
 
-  /* ---- Wall mode (class added by src/scripts/wall.ts) ---- */
+  /* ---- Wall view (class added by src/scripts/wall.ts) ---- */
   .wall.is-wall {
     position: relative;
     max-width: none;
@@ -182,259 +136,44 @@ const place = (id: string): string | undefined => {
     cursor: grabbing;
   }
 
-  /* While dragging, links and buttons must not react to the pointer */
+  /* While dragging, links must not react to the pointer */
   .wall.is-dragging .plane {
     pointer-events: none;
   }
 
   .is-wall .plane {
     position: absolute;
-    top: 0;
-    left: 0;
-    display: block;
-    width: 0;
-    height: 0;
-    transform-origin: 0 0;
-    will-change: transform; /* keep the plane on its own GPU layer while it moves */
-  }
-
-  /* Phone layout by default, desktop layout from 900px */
-  .is-wall .plane > :global(.card) {
-    position: absolute;
-    top: var(--ym);
-    left: var(--xm);
-    width: var(--wm);
-    translate: var(--txm) var(--tym);
-  }
-
-  @media (min-width: 900px) {
-    .is-wall .plane > :global(.card) {
-      top: var(--y);
-      left: var(--x);
-      width: var(--w);
-      translate: var(--tx) var(--ty);
-    }
-  }
-
-  /* Wires: a screen-sized layer under the cards, redrawn from the real port positions */
-  .is-wall .wires {
-    position: absolute;
     inset: 0;
     display: block;
-    width: 100%;
-    max-width: none;
-    height: 100%;
-    pointer-events: none;
   }
 
-  .wires :global(.wire) {
-    fill: none;
-    stroke: var(--c-text-muted);
-    stroke-width: 1.5;
+  /* Every tile (real or clone) is placed by the script with a transform */
+  .is-wall .plane > :global(.tile) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--tile-w);
+    will-change: transform;
   }
 
-  /* In wall mode only the ports that carry a wire are shown, and they light up */
-  .is-wall :global(.port:not(.is-linked)) {
-    display: none;
-  }
-
-  .is-wall :global(.port.is-linked) {
-    border-color: var(--c-text);
-  }
-
-  .is-wall .name {
-    font-size: 3.25rem; /* fixed size: the wall is one drawing */
-  }
-
-  @media (min-width: 900px) {
-    .is-wall .name {
-      font-size: 5.5rem;
-    }
-  }
-
-  .plane > :global(.card--root) {
-    grid-column: 1 / -1;
-  }
-
-  /* Small screens: the name comes first, the visual goes below it */
-  .plane > :global(.card--root .card-visual) {
-    order: 1;
-    border-bottom: 0;
-    border-top: var(--line) solid var(--c-line);
-    /* follow the card's rounded corners (1px less for the border) */
-    border-radius: 0 0 calc(var(--card-radius) - 1px) calc(var(--card-radius) - 1px);
-  }
-
-  @media (min-width: 900px) {
-    .plane > :global(.card--root) {
-      display: grid;
-      grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-      grid-template-rows: auto 1fr;
-    }
-
-    .plane > :global(.card--root .card-head) {
-      grid-column: 1 / -1;
-    }
-
-    .plane > :global(.card--root .card-visual) {
-      grid-column: 2;
-      grid-row: 2;
-      aspect-ratio: auto;
-      border-top: 0;
-      border-left: var(--line) solid var(--c-line);
-      border-radius: 0 0 calc(var(--card-radius) - 1px) 0;
-    }
-
-    .plane > :global(.card--root .card-body) {
-      grid-column: 1;
-      grid-row: 2;
-      justify-content: flex-end;
-      padding: var(--space-6) var(--space-5);
-    }
-  }
-
-  /* ---- Typography inside cards ---- */
-  .name {
-    font-size: var(--fs-display);
-    font-weight: 800;
-  }
-
-  .dot {
-    display: inline-block;
-    width: 0.14em;
-    height: 0.14em;
-    margin-left: 0.04em;
-    background: var(--c-accent);
-  }
-
-  .tagline {
-    max-width: 28ch;
-    font-size: var(--fs-lg);
-    line-height: 1.35;
-  }
-
-  .section-title {
-    font-size: var(--fs-xl);
-  }
-
-  .muted {
-    color: var(--c-text-muted);
-  }
-
-  .meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-5);
-    padding: 0;
-    list-style: none;
-  }
-
-  .status {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    margin-right: var(--space-2);
-    border-radius: 50%;
-    background: var(--c-accent);
-    animation: pulse 2.4s var(--ease-out) infinite;
-  }
-
-  @keyframes pulse {
-    50% {
-      opacity: 0.25;
-    }
-  }
-
-  /* ---- Lists ---- */
-  .titles,
-  .channels,
-  .trace {
-    padding: 0;
-    list-style: none;
-  }
-
-  .channels li {
-    display: flex;
-    justify-content: space-between;
-    padding-block: var(--space-2);
-    border-bottom: var(--line) dashed var(--c-line);
-  }
-
-  /* ---- Projects card ---- */
+  /* ---- Tile visuals ---- */
   .mosaic {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(2, 1fr);
     gap: 1px; /* the gaps show the line color: a fine grid between thumbnails */
-    height: 100%;
     background: var(--c-line);
   }
 
-  .mosaic :global(.tag) {
-    display: none; /* thumbnails are too small for their label */
+  /* Placeholder labels would show through under the subtitle */
+  .plane :global(.tile .tag) {
+    display: none;
   }
 
-  .titles li {
+  .map-visual {
     display: grid;
-    grid-template-columns: 2.5rem minmax(0, 1fr);
-    gap: 0 var(--space-2);
-    padding-block: var(--space-2);
-    border-bottom: var(--line) dashed var(--c-line);
-  }
-
-  .titles li > :last-child {
-    grid-column: 2;
-    font-size: var(--fs-xs);
-    color: var(--c-text-muted);
-  }
-
-  .cta {
-    margin-top: auto;
-    color: var(--c-accent);
-    transition: translate var(--dur-fast) var(--ease-out);
-  }
-
-  :global(.card--hub):hover .cta {
-    translate: 4px 0;
-  }
-
-  .trace li {
-    display: grid;
-    grid-template-columns: 4.5rem minmax(0, 1fr);
-    gap: 0 var(--space-3);
-    padding-block: var(--space-3);
-    border-bottom: var(--line) dashed var(--c-line);
-  }
-
-  .trace .hop {
-    grid-row: span 2;
-  }
-
-  .trace .years {
-    color: var(--c-text);
-  }
-
-  .trace .role {
-    grid-column: 2;
-    font-size: var(--fs-sm);
-  }
-
-  .org {
-    grid-column: 2;
-    font-weight: 600;
-  }
-
-  .skills-map {
-    max-width: 22rem;
-    margin-inline: auto;
-  }
-
-  .skills div {
-    padding-block: var(--space-2);
-    border-bottom: var(--line) dashed var(--c-line);
-  }
-
-  .skills dd {
-    font-size: var(--fs-sm);
+    place-items: center;
+    padding: 3% 24% 36%; /* keep the map in the upper part, clear of the title */
+    background: var(--c-surface);
   }
 </style>
