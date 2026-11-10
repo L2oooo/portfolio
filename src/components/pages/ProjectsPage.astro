@@ -1,0 +1,79 @@
+---
+/*
+ * ProjectsPage — the projects index ("/projets/", "/en/projects/"):
+ * section head with the per-domain tally, then the grid of project cards.
+ */
+import SectionPage from '../SectionPage.astro';
+import ProjectCard from '../wall/ProjectCard.astro';
+import { useTranslations, type Lang } from '../../i18n/ui';
+import { getProjects } from '../../lib/content';
+import { DOMAINS } from '../../data/domains';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const pad = (n: number): string => String(n).padStart(2, '0');
+
+const projects = await getProjects(lang);
+const projectCount = (d: (typeof DOMAINS)[number]): number =>
+  projects.filter((p) => p.data.domains.includes(d)).length;
+---
+
+<SectionPage
+  lang={lang}
+  section="projects"
+  node={1}
+  label={t('card.hub')}
+  title={t('hub.title')}
+  intro={t('hub.text')}
+  meta={pad(projects.length)}
+>
+  <ul slot="head" class="tally" role="list">
+    {DOMAINS.map((d) => (
+      <li class="mono">
+        {t(`domain.${d}`)} <span>{pad(projectCount(d))}</span>
+      </li>
+    ))}
+  </ul>
+
+  <ol class="grid" role="list">
+    {projects.map((p, i) => (
+      <li>
+        <ProjectCard lang={lang} project={p} index={i + 1} />
+      </li>
+    ))}
+  </ol>
+</SectionPage>
+
+<style>
+  .tally {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+    padding: 0;
+    list-style: none;
+  }
+
+  .tally span {
+    color: var(--c-text);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    gap: var(--space-5);
+    padding: 0;
+    list-style: none;
+  }
+
+  .grid li {
+    display: flex;
+  }
+
+  .grid li > :global(.card) {
+    flex: 1;
+  }
+</style>

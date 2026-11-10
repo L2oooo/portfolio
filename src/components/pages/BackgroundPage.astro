@@ -1,0 +1,100 @@
+---
+/*
+ * BackgroundPage — Léo's career as a traceroute ("/parcours/",
+ * "/en/background/"): each step is a "hop", oldest first, with its details.
+ */
+import { render } from 'astro:content';
+import SectionPage from '../SectionPage.astro';
+import { useTranslations, type Lang } from '../../i18n/ui';
+import { getExperiences } from '../../lib/content';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const pad = (n: number): string => String(n).padStart(2, '0');
+
+const experiences = await getExperiences(lang);
+const steps = await Promise.all(experiences.map(async (e) => ({ e, Content: (await render(e)).Content })));
+---
+
+<SectionPage
+  lang={lang}
+  section="background"
+  node={2}
+  label={t('card.background')}
+  title={t('background.title')}
+  intro={t('background.intro')}
+  meta={pad(experiences.length)}
+>
+  <ol class="trace" role="list">
+    {steps.map(({ e, Content }, i) => (
+      <li>
+        <span class="mono hop">{t('background.hop')} {pad(i + 1)}</span>
+        <div class="step">
+          <p class="mono years">
+            {e.data.start.slice(0, 4)}–{e.data.end?.slice(0, 4) ?? t('content.present')} · {e.data.location}
+          </p>
+          <h2 class="org">{e.data.org}</h2>
+          <p class="role">{e.data.role}</p>
+          <div class="details">
+            <Content />
+          </div>
+        </div>
+      </li>
+    ))}
+  </ol>
+</SectionPage>
+
+<style>
+  .trace {
+    padding: 0;
+    list-style: none;
+  }
+
+  .trace li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2) var(--space-5);
+    padding-block: var(--space-5);
+    border-bottom: var(--line) dashed var(--c-line);
+  }
+
+  @media (min-width: 700px) {
+    .trace li {
+      grid-template-columns: 7rem minmax(0, 1fr);
+    }
+  }
+
+  .hop {
+    padding-top: 0.2em;
+  }
+
+  .years {
+    color: var(--c-text);
+  }
+
+  .org {
+    font-size: var(--fs-xl);
+    margin-block: var(--space-2) var(--space-1);
+  }
+
+  .role {
+    color: var(--c-text-muted);
+    margin-bottom: var(--space-3);
+  }
+
+  .details {
+    max-width: 70ch;
+  }
+
+  .details :global(ul) {
+    padding-left: 1.1em;
+  }
+
+  .details :global(li) {
+    margin-block: var(--space-1);
+  }
+</style>

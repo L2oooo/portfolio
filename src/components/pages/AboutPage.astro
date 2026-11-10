@@ -1,0 +1,105 @@
+---
+/*
+ * AboutPage — Léo's own page ("/a-propos/", "/en/about/"): portrait visual,
+ * short bio (placeholder until Léo writes it), status, location, languages.
+ */
+import SectionPage from '../SectionPage.astro';
+import BlueprintPlaceholder from '../wall/BlueprintPlaceholder.astro';
+import { useTranslations, type Lang } from '../../i18n/ui';
+import { LANGUAGES } from '../../data/skills';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<SectionPage lang={lang} section="about" node={0} label={t('about.label')} title="Léo Salvayre" intro={t('hero.tagline')}>
+  <ul slot="head" class="meta" role="list">
+    <li class="mono"><span class="status" aria-hidden="true"></span>{t('hero.status')}</li>
+    <li class="mono">{t('hero.loc')}</li>
+  </ul>
+
+  <div class="about">
+    <div class="portrait">
+      <BlueprintPlaceholder seed="leo-salvayre" label="portrait" />
+    </div>
+    <div class="text">
+      <p class="bio">{t('about.bio')}</p>
+      <h2 class="mono">{t('skills.languages')}</h2>
+      <ul class="languages" role="list">
+        {LANGUAGES[lang].map((l) => <li>{l}</li>)}
+      </ul>
+    </div>
+  </div>
+</SectionPage>
+
+<style>
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+    padding: 0;
+    list-style: none;
+  }
+
+  .status {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: var(--space-2);
+    border-radius: 50%;
+    background: var(--c-accent);
+    animation: pulse 2.4s var(--ease-out) infinite;
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.25;
+    }
+  }
+
+  .about {
+    display: grid;
+    gap: var(--space-6);
+  }
+
+  @media (min-width: 900px) {
+    .about {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      align-items: start;
+    }
+  }
+
+  .portrait {
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border: var(--line) solid var(--c-line-strong);
+    border-radius: 12px;
+  }
+
+  .bio {
+    max-width: 60ch;
+    font-size: var(--fs-lg);
+    margin-bottom: var(--space-6);
+  }
+
+  .text h2 {
+    font-size: var(--fs-xs);
+    font-weight: 400;
+    font-stretch: var(--stretch-body);
+    margin-bottom: var(--space-2);
+  }
+
+  .languages {
+    padding: 0;
+    list-style: none;
+  }
+
+  .languages li {
+    padding-block: var(--space-2);
+    border-bottom: var(--line) dashed var(--c-line);
+  }
+</style>

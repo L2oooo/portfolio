@@ -1,0 +1,55 @@
+---
+/*
+ * ContactPage — contact channels ("/contact/", "/en/contact/").
+ * Placeholders until Léo provides his contact details.
+ */
+import SectionPage from '../SectionPage.astro';
+import { useTranslations, type Lang } from '../../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const channels = ['contact.email', 'contact.linkedin', 'contact.github'] as const;
+---
+
+<SectionPage
+  lang={lang}
+  section="contact"
+  node={4}
+  label={t('card.contact')}
+  title={t('contact.title')}
+  intro={t('contact.text')}
+>
+  <ul class="channels" role="list">
+    {channels.map((key) => (
+      <li>
+        <span class="mono">{t(key)}</span>
+        <span class="value">{t('contact.soon')}</span>
+      </li>
+    ))}
+  </ul>
+</SectionPage>
+
+<style>
+  .channels {
+    max-width: 48rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  .channels li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding-block: var(--space-4);
+    border-bottom: var(--line) dashed var(--c-line);
+  }
+
+  .value {
+    font-size: var(--fs-lg);
+    color: var(--c-text-muted);
+  }
+</style>

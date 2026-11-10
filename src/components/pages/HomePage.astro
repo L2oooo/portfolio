@@ -3,11 +3,11 @@
  * HomePage — the home page content, shared by "/" (fr) and "/en/" (en):
  * header, the card wall, and the drawing's title block.
  */
-import Base from '../layouts/Base.astro';
-import Header from './Header.astro';
-import TitleBlock from './TitleBlock.astro';
-import Wall from './wall/Wall.astro';
-import { useTranslations, type Lang } from '../i18n/ui';
+import Base from '../../layouts/Base.astro';
+import Header from '../Header.astro';
+import TitleBlock from '../TitleBlock.astro';
+import Wall from '../wall/Wall.astro';
+import { useTranslations, type Lang } from '../../i18n/ui';
 
 interface Props {
   lang: Lang;

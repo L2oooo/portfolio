@@ -1,0 +1,72 @@
+---
+/*
+ * SkillsPage — skills by domain ("/competences/", "/en/skills/"): the radial
+ * domain map next to the skill list of each domain (from src/data/skills.ts).
+ */
+import SectionPage from '../SectionPage.astro';
+import TopologyMap from '../TopologyMap.astro';
+import { useTranslations, type Lang } from '../../i18n/ui';
+import { buildGraph } from '../../data/graph';
+import { DOMAINS } from '../../data/domains';
+import { SKILLS } from '../../data/skills';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const domainGraph = buildGraph([]); // LÉO + the 5 domains
+---
+
+<SectionPage
+  lang={lang}
+  section="skills"
+  node={3}
+  label={t('card.skills')}
+  title={t('skills.title')}
+  intro={t('skills.intro')}
+  meta={String(DOMAINS.length).padStart(2, '0')}
+>
+  <div class="skills">
+    <div class="map">
+      <TopologyMap lang={lang} graph={domainGraph} compact />
+    </div>
+    <dl class="list">
+      {DOMAINS.map((d) => (
+        <div>
+          <dt class="mono">{t(`domain.${d}`)}</dt>
+          <dd>{SKILLS[d][lang].join(' · ')}</dd>
+        </div>
+      ))}
+    </dl>
+  </div>
+</SectionPage>
+
+<style>
+  .skills {
+    display: grid;
+    gap: var(--space-6);
+  }
+
+  @media (min-width: 900px) {
+    .skills {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      align-items: center;
+    }
+  }
+
+  .map {
+    max-width: 28rem;
+    margin-inline: auto;
+  }
+
+  .list div {
+    padding-block: var(--space-3);
+    border-bottom: var(--line) dashed var(--c-line);
+  }
+
+  .list dd {
+    font-size: var(--fs-lg);
+  }
+</style>
